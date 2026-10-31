@@ -1,12 +1,19 @@
 
 import { useEffect, useState } from "react";
+
 import type {
   Transaction,
   TransactionType,
+  Budget,
+  SavingsGoal,
 } from "./types";
+
 import "./App.css";
 
 const STORAGE_KEY = "fintrack_transactions_v1";
+const BUDGET_STORAGE_KEY = "fintrack_budgets_v1";
+const SAVINGS_STORAGE_KEY = "fintrack_savings_v1";
+
 
 const categories = {
   income: [
@@ -89,7 +96,86 @@ function loadTransactions(): Transaction[] {
   }
 }
 
+function loadBudgets(): Budget[] {
+  try {
+    const saved = localStorage.getItem(
+      BUDGET_STORAGE_KEY
+    );
+
+    if (!saved) return [];
+
+    const parsed: unknown = JSON.parse(saved);
+
+    if (!Array.isArray(parsed)) return [];
+
+    return parsed.filter((item): item is Budget => {
+      if (
+        typeof item !== "object" ||
+        item === null
+      ) {
+        return false;
+      }
+
+      const budget = item as Record<string, unknown>;
+
+      return (
+        typeof budget.id === "string" &&
+        typeof budget.category === "string" &&
+        typeof budget.limitAmount === "number" &&
+        Number.isSafeInteger(budget.limitAmount) &&
+        budget.limitAmount > 0 &&
+        typeof budget.month === "string" &&
+        /^\d{4}-\d{2}$/.test(budget.month)
+      );
+    });
+  } catch (error) {
+    console.error("Failed to load budgets:", error);
+    return [];
+  }
+}
+
+function loadSavingsGoals(): SavingsGoal[] {
+  try {
+    const saved = localStorage.getItem(
+      SAVINGS_STORAGE_KEY
+    );
+
+    if (!saved) return [];
+
+    const parsed: unknown = JSON.parse(saved);
+
+    if (!Array.isArray(parsed)) return [];
+
+    return parsed.filter((item): item is SavingsGoal => {
+      if (
+        typeof item !== "object" ||
+        item === null
+      ) {
+        return false;
+      }
+
+      const goal = item as Record<string, unknown>;
+
+      return (
+        typeof goal.id === "string" &&
+        typeof goal.name === "string" &&
+        typeof goal.targetAmount === "number" &&
+        Number.isSafeInteger(goal.targetAmount) &&
+        goal.targetAmount > 0 &&
+        typeof goal.savedAmount === "number" &&
+        Number.isSafeInteger(goal.savedAmount) &&
+        goal.savedAmount >= 0 &&
+        typeof goal.createdAt === "string"
+      );
+    });
+  } catch (error) {
+    console.error("Failed to load savings:", error);
+    return [];
+  }
+}
+
 function App() {
+  // Transaction States
   const [transactions, setTransactions] =
     useState<Transaction[]>(loadTransactions);
 
@@ -102,6 +188,27 @@ function App() {
   const [date, setDate] = useState(getToday);
   const [error, setError] = useState("");
 
+  // Budget States
+const [budgets, setBudgets] =
+  useState<Budget[]>(loadBudgets);
+
+const [budgetCategory, setBudgetCategory] =
+  useState(categories.expense[0]);
+
+const [budgetAmount, setBudgetAmount] = useState("");
+
+const [budgetMonth, setBudgetMonth] =
+  useState(getToday().slice(0, 7));
+
+// Savings States
+const [savingsGoals, setSavingsGoals] =
+  useState<SavingsGoal[]>(loadSavingsGoals);
+
+const [goalName, setGoalName] = useState("");
+
+const [goalTarget, setGoalTarget] = useState("");
+
+const [savingsError, setSavingsError] = useState("");
   useEffect(() => {
     try {
       localStorage.setItem(
@@ -112,6 +219,29 @@ function App() {
       console.error("Failed to save transactions:", error);
     }
   }, [transactions]);
+  useEffect(() => {
+  try {
+    localStorage.setItem(
+      BUDGET_STORAGE_KEY,
+      JSON.stringify(budgets)
+    );
+  } catch (error) {
+    console.error("Failed to save budgets:", error);
+  }
+}, [budgets]);
+
+// Save Savings Goals
+useEffect(() => {
+  try {
+    localStorage.setItem(
+      SAVINGS_STORAGE_KEY,
+      JSON.stringify(savingsGoals)
+    );
+  } catch (error) {
+    console.error("Failed to save savings:", error);
+  }
+}, [savingsGoals]);
+
 
   // Calculate totals from transaction data
   const totalIncome = transactions
@@ -192,6 +322,207 @@ function App() {
     );
   }
 
+function handleAddBudget() {
+  const limit = Number(budgetAmount);
+
+  if (
+    !budgetAmount.trim() ||
+    !Number.isSafeInteger(limit) ||
+    limit <= 0
+  ) {
+    window.alert("Enter a valid budget amount.");
+    return;
+  }
+
+  const existing = budgets.find(
+    (item) =>
+      item.category === budgetCategory &&
+      item.month === budgetMonth
+  );
+
+  if (existing) {
+    setBudgets((previous) =>
+      previous.map((item) =>
+        item.id === existing.id
+          ? { ...item, limitAmount: limit }
+          : item
+      )
+    );
+  } else {
+    const newBudget: Budget = {
+      id: crypto.randomUUID(),
+      category: budgetCategory,
+      limitAmount: limit,
+      month: budgetMonth,
+      createdAt: new Date().toISOString(),
+    };
+
+    setBudgets((previous) => [
+      ...previous,
+      newBudget,
+    ]);
+  }
+
+  setBudgetAmount("");
+}
+
+function handleEditBudget(budget: Budget) {
+  const input = window.prompt(
+    "Enter new budget limit:",
+    String(budget.limitAmount)
+  );
+
+  if (input === null) return;
+
+  const amount = Number(input);
+
+  if (
+    !input.trim() ||
+    !Number.isSafeInteger(amount) ||
+    amount <= 0
+  ) {
+    window.alert("Enter a valid amount.");
+    return;
+  }
+
+  setBudgets((previous) =>
+    previous.map((item) =>
+      item.id === budget.id
+        ? { ...item, limitAmount: amount }
+        : item
+    )
+  );
+}
+
+function handleDeleteBudget(id: string) {
+  if (!window.confirm("Delete this budget?")) return;
+
+  setBudgets((previous) =>
+    previous.filter((item) => item.id !== id)
+  );
+}
+
+function handleAddSavingsGoal() {
+  setSavingsError("");
+
+  const name = goalName.trim();
+  const target = Number(goalTarget);
+
+  if (!name) {
+    setSavingsError("Enter a goal name.");
+    return;
+  }
+
+  if (
+    !goalTarget.trim() ||
+    !Number.isSafeInteger(target) ||
+    target <= 0
+  ) {
+    setSavingsError("Enter a valid target amount.");
+    return;
+  }
+
+  const newGoal: SavingsGoal = {
+    id: crypto.randomUUID(),
+    name,
+    targetAmount: target,
+    savedAmount: 0,
+    createdAt: new Date().toISOString(),
+  };
+
+  setSavingsGoals((previous) => [
+    ...previous,
+    newGoal,
+  ]);
+
+  setGoalName("");
+  setGoalTarget("");
+}
+
+function handleAddSavings(goal: SavingsGoal) {
+  const input = window.prompt(
+    `Add savings for ${goal.name} (MMK):`
+  );
+
+  if (input === null) return;
+
+  const amount = Number(input);
+
+  if (
+    !input.trim() ||
+    !Number.isSafeInteger(amount) ||
+    amount <= 0
+  ) {
+    window.alert("Enter a valid amount.");
+    return;
+  }
+
+  if (
+    !Number.isSafeInteger(goal.savedAmount + amount)
+  ) {
+    window.alert("Amount is too large.");
+    return;
+  }
+
+  setSavingsGoals((previous) =>
+    previous.map((item) =>
+      item.id === goal.id
+        ? {
+            ...item,
+            savedAmount: item.savedAmount + amount,
+          }
+        : item
+    )
+  );
+}
+
+function handleWithdrawSavings(goal: SavingsGoal) {
+  const input = window.prompt(
+    `Withdraw from ${goal.name} (MMK):`
+  );
+
+  if (input === null) return;
+
+  const amount = Number(input);
+
+  if (
+    !input.trim() ||
+    !Number.isSafeInteger(amount) ||
+    amount <= 0
+  ) {
+    window.alert("Enter a valid amount.");
+    return;
+  }
+
+  if (amount > goal.savedAmount) {
+    window.alert("Insufficient savings.");
+    return;
+  }
+
+  setSavingsGoals((previous) =>
+    previous.map((item) =>
+      item.id === goal.id
+        ? {
+            ...item,
+            savedAmount: item.savedAmount - amount,
+          }
+        : item
+    )
+  );
+}
+
+function handleDeleteSavingsGoal(id: string) {
+  if (!window.confirm("Delete this savings goal?")) {
+    return;
+  }
+
+  setSavingsGoals((previous) =>
+    previous.filter((item) => item.id !== id)
+  );
+}
+
+
+
   return (
     <main className="dashboard">
       <header className="page-header">
@@ -224,7 +555,282 @@ function App() {
         </div>
       </section>
 
-      <section className="content-grid">
+{/* Monthly Budget Planner */}
+<section className="panel budget-panel">
+  <h2>Monthly Budget Planner</h2>
+  <p className="panel-description">
+    Set a spending limit for each category.
+  </p>
+
+  <form
+    onSubmit={(event) => {
+      event.preventDefault();
+      handleAddBudget();
+    }}
+  >
+    <div className="form-group">
+      <label htmlFor="budget-category">Category</label>
+      <select
+        id="budget-category"
+        value={budgetCategory}
+        onChange={(event) =>
+          setBudgetCategory(event.target.value)
+        }
+      >
+        {categories.expense.map((item) => (
+          <option key={item} value={item}>
+            {item}
+          </option>
+        ))}
+      </select>
+    </div>
+
+    <div className="form-group">
+      <label htmlFor="budget-amount">
+        Monthly Limit (MMK)
+      </label>
+      <input
+        id="budget-amount"
+        type="number"
+        min="1"
+        step="1"
+        required
+        value={budgetAmount}
+        onChange={(event) =>
+          setBudgetAmount(event.target.value)
+        }
+      />
+    </div>
+
+    <div className="form-group">
+      <label htmlFor="budget-month">Month</label>
+      <input
+        id="budget-month"
+        type="month"
+        required
+        value={budgetMonth}
+        onChange={(event) =>
+          setBudgetMonth(event.target.value)
+        }
+      />
+    </div>
+
+    <button type="submit" className="add-button">
+      + Save Budget
+    </button>
+  </form>
+</section>
+
+{/* Saved Budgets */}
+<section className="panel budget-results">
+  <h2>My Monthly Budgets</h2>
+
+  {budgets.length === 0 ? (
+    <p>No budgets created yet.</p>
+  ) : (
+    budgets.map((budget) => {
+      const spent = transactions
+        .filter(
+          (item) =>
+            item.type === "expense" &&
+            item.category === budget.category &&
+            item.date.startsWith(budget.month)
+        )
+        .reduce((sum, item) => sum + item.amount, 0);
+
+      const percentage =
+        (spent / budget.limitAmount) * 100;
+
+      const remaining = budget.limitAmount - spent;
+
+      return (
+        <div className="budget-item" key={budget.id}>
+          <h3>{budget.category} — {budget.month}</h3>
+
+          <p>
+            {formatMoney(spent)} / {formatMoney(budget.limitAmount)}
+          </p>
+
+          <div className="progress-track">
+            <div
+              className="progress-fill"
+              style={{
+                width: `${Math.min(percentage, 100)}%`,
+                background:
+                  percentage >= 100
+                    ? "#dc2626"
+                    : percentage >= 80
+                    ? "#f59e0b"
+                    : "#4f46e5",
+              }}
+            />
+          </div>
+
+          <p>
+            {percentage.toFixed(1)}% used —{" "}
+            {remaining >= 0
+              ? `${formatMoney(remaining)} left`
+              : `${formatMoney(Math.abs(remaining))} over budget`}
+          </p>
+
+          <button
+            type="button"
+            onClick={() => handleEditBudget(budget)}
+          >
+            Edit Budget
+          </button>
+
+          <button
+            type="button"
+            onClick={() => handleDeleteBudget(budget.id)}
+          >
+            Delete Budget
+          </button>
+        </div>
+      );
+    })
+  )}
+</section>
+
+
+{/* Savings Goals */}
+<section className="panel savings-panel">
+  <h2>My Savings Goals</h2>
+  <p className="panel-description">
+    Create and manage your savings goals.
+  </p>
+
+  <form
+    onSubmit={(event) => {
+      event.preventDefault();
+      handleAddSavingsGoal();
+    }}
+  >
+    <div className="form-group">
+      <label htmlFor="goal-name">Goal Name</label>
+      <input
+        id="goal-name"
+        type="text"
+        required
+        maxLength={100}
+        placeholder="e.g. New Laptop"
+        value={goalName}
+        onChange={(event) =>
+          setGoalName(event.target.value)
+        }
+      />
+    </div>
+
+    <div className="form-group">
+      <label htmlFor="goal-target">
+        Target Amount (MMK)
+      </label>
+      <input
+        id="goal-target"
+        type="number"
+        min="1"
+        required
+        value={goalTarget}
+        onChange={(event) =>
+          setGoalTarget(event.target.value)
+        }
+      />
+    </div>
+
+    {savingsError && (
+      <p className="error-message" role="alert">
+        {savingsError}
+      </p>
+    )}
+
+    <button type="submit" className="add-button">
+      + Create Savings Goal
+    </button>
+  </form>
+
+  <div className="savings-list">
+    {savingsGoals.length === 0 ? (
+      <div className="empty-state">
+        <p>No savings goals yet.</p>
+        <span>Create your first savings goal.</span>
+      </div>
+    ) : (
+      savingsGoals.map((goal) => {
+        const percentage =
+          (goal.savedAmount / goal.targetAmount) * 100;
+
+        const remaining = Math.max(
+          goal.targetAmount - goal.savedAmount,
+          0
+        );
+
+        const completed =
+          goal.savedAmount >= goal.targetAmount;
+
+        return (
+          <div className="savings-item" key={goal.id}>
+            <div className="savings-heading">
+              <h3>{goal.name}</h3>
+              <span>
+                {completed ? "Completed" : "In Progress"}
+              </span>
+            </div>
+
+            <p className="savings-amount">
+              {formatMoney(goal.savedAmount)}
+              {" / "}
+              {formatMoney(goal.targetAmount)}
+            </p>
+
+            <div className="progress-track">
+              <div
+                className="progress-fill"
+                style={{
+                  width: `${Math.min(percentage, 100)}%`,
+                }}
+              />
+            </div>
+
+            <div className="savings-details">
+              <span>{percentage.toFixed(1)}% saved</span>
+              <span>
+                {completed
+                  ? "Goal achieved!"
+                  : `${formatMoney(remaining)} left`}
+              </span>
+            </div>
+
+            <div className="savings-actions">
+              <button
+                type="button"
+                onClick={() => handleAddSavings(goal)}
+              >
+                + Add Savings
+              </button>
+
+              <button
+                type="button"
+                disabled={goal.savedAmount === 0}
+                onClick={() => handleWithdrawSavings(goal)}
+              >
+                Withdraw
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleDeleteSavingsGoal(goal.id)}
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        );
+      })
+    )}
+  </div>
+</section>
+{/* Transaction Management */}
+ <section className="content-grid">
         <div className="panel">
           <h2>Add Transaction</h2>
           <p className="panel-description">

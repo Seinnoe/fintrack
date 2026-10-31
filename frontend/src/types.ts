@@ -10,3 +10,20 @@ export interface Transaction {
   date: string;
   createdAt: string;
 }
+
+export interface SavingsGoal {
+  id: string;
+  name: string;
+  targetAmount: number;
+  savedAmount: number;
+  createdAt: string;
+}
+
+export interface Budget {
+  id: string;
+  category: string;
+  limitAmount: number;
+  month: string;
+  createdAt: string;
+}
+
