@@ -261,6 +261,98 @@ useEffect(() => {
       b.createdAt.localeCompare(a.createdAt)
   );
 
+  // Analytics Dashboard Calculations
+
+  const currentMonth = getToday().slice(0, 7);
+
+  const monthlyTransactions = transactions.filter(
+    (item) => item.date.startsWith(currentMonth)
+  );
+
+  const monthlyIncome = monthlyTransactions
+    .filter((item) => item.type === "income")
+    .reduce((sum, item) => sum + item.amount, 0);
+
+  const monthlyExpenses = monthlyTransactions
+    .filter((item) => item.type === "expense")
+    .reduce((sum, item) => sum + item.amount, 0);
+
+  const monthlyNet = monthlyIncome - monthlyExpenses;
+
+  // Category-wise expense analysis
+  const categorySpending = Object.entries(
+    monthlyTransactions
+      .filter((item) => item.type === "expense")
+      .reduce<Record<string, number>>((result, item) => {
+        result[item.category] =
+          (result[item.category] || 0) + item.amount;
+
+        return result;
+      }, {})
+  )
+    .map(([category, total]) => ({
+      category,
+      total,
+    }))
+    .sort((a, b) => b.total - a.total);
+
+  // Last 6 months comparison
+  const monthlyTrend = Array.from(
+    { length: 6 },
+    (_, index) => {
+      const date = new Date();
+      date.setDate(1);
+      date.setMonth(date.getMonth() - (5 - index));
+
+      const month = [
+        date.getFullYear(),
+        String(date.getMonth() + 1).padStart(2, "0"),
+      ].join("-");
+
+      const monthTransactions = transactions.filter(
+        (item) => item.date.startsWith(month)
+      );
+
+      return {
+        month,
+        label: date.toLocaleDateString("en-US", {
+          month: "short",
+        }),
+        income: monthTransactions
+          .filter((item) => item.type === "income")
+          .reduce((sum, item) => sum + item.amount, 0),
+        expenses: monthTransactions
+          .filter((item) => item.type === "expense")
+          .reduce((sum, item) => sum + item.amount, 0),
+      };
+    }
+  );
+
+  const maxMonthlyValue = Math.max(
+    1,
+    ...monthlyTrend.flatMap((item) => [
+      item.income,
+      item.expenses,
+    ])
+  );
+
+  // Savings overview
+  const totalSaved = savingsGoals.reduce(
+    (sum, goal) => sum + goal.savedAmount,
+    0
+  );
+
+  const totalSavingsTarget = savingsGoals.reduce(
+    (sum, goal) => sum + goal.targetAmount,
+    0
+  );
+
+  const savingsProgress =
+    totalSavingsTarget > 0
+      ? (totalSaved / totalSavingsTarget) * 100
+      : 0;
+
+
   function handleTypeChange(
     newType: TransactionType
   ) {
@@ -829,6 +921,177 @@ function handleDeleteSavingsGoal(id: string) {
     )}
   </div>
 </section>
+
+      {/* Analytics Dashboard */}
+      <section className="panel analytics-panel">
+        <h2>Financial Analytics</h2>
+        <p className="panel-description">
+          Your financial performance for {currentMonth}.
+        </p>
+
+        {/* Monthly Summary */}
+        <div className="analytics-summary">
+          <div className="analytics-card">
+            <span>Monthly Income</span>
+            <strong className="income">
+              {formatMoney(monthlyIncome)}
+            </strong>
+          </div>
+
+          <div className="analytics-card">
+            <span>Monthly Expenses</span>
+            <strong className="expense">
+              {formatMoney(monthlyExpenses)}
+            </strong>
+          </div>
+
+          <div className="analytics-card">
+            <span>Monthly Net</span>
+            <strong
+              className={
+                monthlyNet >= 0 ? "income" : "expense"
+              }
+            >
+              {formatMoney(monthlyNet)}
+            </strong>
+          </div>
+        </div>
+
+        {/* Income vs Expense Chart */}
+        <div className="analytics-section">
+          <h3>Income vs Expenses</h3>
+
+          <div className="monthly-chart">
+            {monthlyTrend.map((item) => (
+              <div
+                className="chart-month"
+                key={item.month}
+              >
+                <div className="chart-bars">
+                  <div
+                    className="chart-bar income-bar"
+                    style={{
+                      height: `${Math.max(
+                        item.income > 0 ? 3 : 0,
+                        (item.income / maxMonthlyValue) * 160
+                      )}px`,
+                    }}
+                    title={`Income: ${formatMoney(item.income)}`}
+                  />
+
+                  <div
+                    className="chart-bar expense-bar"
+                    style={{
+                      height: `${Math.max(
+                        item.expenses > 0 ? 3 : 0,
+                        (item.expenses / maxMonthlyValue) * 160
+                      )}px`,
+                    }}
+                    title={`Expenses: ${formatMoney(item.expenses)}`}
+                  />
+                </div>
+
+                <span>{item.label}</span>
+              </div>
+            ))}
+          </div>
+
+          <div className="chart-legend">
+            <span>
+              <i className="legend-income" />
+              Income
+            </span>
+
+            <span>
+              <i className="legend-expense" />
+              Expenses
+            </span>
+          </div>
+        </div>
+
+        {/* Category Spending */}
+        <div className="analytics-section">
+          <h3>Spending by Category</h3>
+
+          {categorySpending.length === 0 ? (
+            <div className="empty-state">
+              <p>No expenses this month.</p>
+              <span>
+                Add expenses to see your category analysis.
+              </span>
+            </div>
+          ) : (
+            <div className="category-analysis">
+              {categorySpending.map((item) => {
+                const percentage =
+                  monthlyExpenses > 0
+                    ? (item.total / monthlyExpenses) * 100
+                    : 0;
+
+                return (
+                  <div
+                    className="category-row"
+                    key={item.category}
+                  >
+                    <div className="category-info">
+                      <strong>{item.category}</strong>
+                      <span>
+                        {formatMoney(item.total)}
+                      </span>
+                    </div>
+
+                    <div className="progress-track">
+                      <div
+                        className="progress-fill category-fill"
+                        style={{
+                          width: `${percentage}%`,
+                        }}
+                      />
+                    </div>
+
+                    <small>
+                      {percentage.toFixed(1)}%
+                    </small>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Savings Overview */}
+        <div className="analytics-section">
+          <h3>Savings Overview</h3>
+
+          <div className="analytics-card">
+            <span>Total Saved</span>
+            <strong>
+              {formatMoney(totalSaved)}
+            </strong>
+
+            <p>
+              Target: {formatMoney(totalSavingsTarget)}
+            </p>
+
+            <div className="progress-track">
+              <div
+                className="progress-fill savings-fill"
+                style={{
+                  width: `${Math.min(
+                    savingsProgress,
+                    100
+                  )}%`,
+                }}
+              />
+            </div>
+
+            <small>
+              {savingsProgress.toFixed(1)}% of total goals
+            </small>
+          </div>
+        </div>
+      </section>
+
 {/* Transaction Management */}
  <section className="content-grid">
         <div className="panel">
