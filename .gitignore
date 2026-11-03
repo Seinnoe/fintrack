@@ -8,3 +8,6 @@ coverage/
 *.log
 frontend/src/App.backup.tsx
 frontend/src/App.backup.css
+
+# Local backup files
+/backup/
