@@ -6,3 +6,5 @@ dist/
 .DS_Store
 coverage/
 *.log
+frontend/src/App.backup.tsx
+frontend/src/App.backup.css
