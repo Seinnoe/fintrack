@@ -1,4 +1,6 @@
+import "./App.css";
 import { useEffect, useState } from "react";
+import Login from "./components/auth/Login";
 import type { FormEvent } from "react";
 
 import type {
@@ -6,11 +8,14 @@ import type {
   TransactionType,
   Budget,
   SavingsGoal,
+  Debt,
+  DebtOverview,
+  DebtType,
 } from "./types";
+const API_URL =
+  import.meta.env.VITE_API_URL || "http://127.0.0.1:3000";
 
-import "./App.css";
 
-const STORAGE_KEY = "fintrack_transactions_v1";
 const BUDGET_STORAGE_KEY = "fintrack_budgets_v1";
 const SAVINGS_STORAGE_KEY = "fintrack_savings_v1";
 const NOTIFICATIONS_STORAGE_KEY = "fintrack_notifications_v1";
@@ -37,8 +42,14 @@ const categories = {
   ],
 };
 
-type Page = "dashboard" | "transactions" | "budgets" | "savings" | "analytics";
 
+type Page =
+  | "dashboard"
+  | "transactions"
+  | "budgets"
+  | "savings"
+  | "analytics"
+  | "debts";
 function getToday(): string {
   const now = new Date();
   const year = now.getFullYear();
@@ -86,53 +97,6 @@ function loadNotifications(): AppNotification[] {
 }
 
 
-function loadTransactions(): Transaction[] {
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (!stored) return [];
-
-    const parsed: unknown = JSON.parse(stored);
-    if (Array.isArray(parsed) && parsed.every(isTransaction)) {
-      return parsed;
-    }
-
-    console.warn("Invalid FinTrack saved transaction data");
-    return [];
-  } catch (error) {
-    console.error("Failed to load transactions:", error);
-    return [];
-  }
-}
-
-function loadBudgets(): Budget[] {
-  try {
-    const saved = localStorage.getItem(BUDGET_STORAGE_KEY);
-    if (!saved) return [];
-
-    const parsed: unknown = JSON.parse(saved);
-    if (!Array.isArray(parsed)) return [];
-
-    return parsed.filter((item): item is Budget => {
-      if (typeof item !== "object" || item === null) return false;
-
-      const budget = item as Record<string, unknown>;
-
-      return (
-        typeof budget.id === "string" &&
-        typeof budget.category === "string" &&
-        typeof budget.limitAmount === "number" &&
-        Number.isSafeInteger(budget.limitAmount) &&
-        budget.limitAmount > 0 &&
-        typeof budget.month === "string" &&
-        /^\d{4}-\d{2}$/.test(budget.month)
-      );
-    });
-  } catch (error) {
-    console.error("Failed to load budgets:", error);
-    return [];
-  }
-}
-
 function loadSavingsGoals(): SavingsGoal[] {
   try {
     const saved = localStorage.getItem(SAVINGS_STORAGE_KEY);
@@ -164,9 +128,35 @@ function loadSavingsGoals(): SavingsGoal[] {
   }
 }
 
+
+function getStoredUser() {
+  try {
+    const raw =
+      localStorage.getItem("fintrack_user") ||
+      sessionStorage.getItem("fintrack_user");
+
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
 function App() {
+  const currentUser = getStoredUser();
+  const displayName = currentUser?.name || "FinTrack Member";
+  const displayEmail = currentUser?.email || "Personal account";
+  const avatarLetter = displayName.charAt(0).toUpperCase();
+
+  const [isAuthenticated, setIsAuthenticated] = useState(() =>
+    Boolean(
+      localStorage.getItem("fintrack_token") ||
+      sessionStorage.getItem("fintrack_token")
+    )
+  );
+
   // Transaction state
-  const [transactions, setTransactions] = useState<Transaction[]>(loadTransactions);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [editingTransactionId, setEditingTransactionId] = useState<string | null>(null);
   const [type, setType] = useState<TransactionType>("expense");
   const [amount, setAmount] = useState("");
   const [category, setCategory] = useState("Food");
@@ -175,7 +165,7 @@ function App() {
   const [error, setError] = useState("");
 
   // Budget state
-  const [budgets, setBudgets] = useState<Budget[]>(loadBudgets);
+  const [budgets, setBudgets] = useState<Budget[]>([]);
   const [budgetCategory, setBudgetCategory] = useState(categories.expense[0]);
   const [budgetAmount, setBudgetAmount] = useState("");
   const [budgetMonth, setBudgetMonth] = useState(getToday().slice(0, 7));
@@ -185,6 +175,29 @@ function App() {
   const [goalName, setGoalName] = useState("");
   const [goalTarget, setGoalTarget] = useState("");
   const [savingsError, setSavingsError] = useState("");
+  // Debt management state
+const [debts, setDebts] = useState<Debt[]>([]);
+const [debtTab, setDebtTab] = useState<
+  "active" | "completed" | "archived"
+>("active");
+
+const [debtOverview, setDebtOverview] =
+  useState<DebtOverview>({
+    totalBorrowed: 0,
+    totalLent: 0,
+    remainingBorrowed: 0,
+    remainingLent: 0,
+  });
+
+const [debtLoading, setDebtLoading] = useState(false);
+const [debtError, setDebtError] = useState("");
+const [paymentError, setPaymentError] = useState("");
+const [debtType, setDebtType] = useState<DebtType>("borrowed");
+const [debtPersonName, setDebtPersonName] = useState("");
+const [debtPrincipalAmount, setDebtPrincipalAmount] = useState("");
+const [debtDescription, setDebtDescription] = useState("");
+const [debtStartDate, setDebtStartDate] = useState(getToday());
+const [debtDueDate, setDebtDueDate] = useState("");
 
   const [activePage, setActivePage] = useState<Page>("dashboard");
   const [searchQuery, setSearchQuery] = useState("");
@@ -195,20 +208,307 @@ function App() {
   const [toast, setToast] = useState("");
   const [chartPeriod, setChartPeriod] = useState(6);
 
+  // Load all authenticated user data independently.
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    const controller = new AbortController();
+
+    async function loadEndpoint(path: string): Promise<any> {
+      const token =
+        localStorage.getItem("fintrack_token") ||
+        sessionStorage.getItem("fintrack_token");
+
+      if (!token) {
+        throw new Error("SESSION_EXPIRED");
+      }
+
+      const response = await fetch(`${API_URL}${path}`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        signal: controller.signal,
+      });
+
+      if (response.status === 401) {
+        throw new Error("SESSION_EXPIRED");
+      }
+
+      const result = await response.json();
+
+      if (!response.ok || !result.success) {
+        throw new Error(result.message || `Unable to load ${path}.`);
+      }
+
+      return result;
+    }
+
+    async function loadFromDatabase() {
+      setError("");
+
+      try {
+        // Clear previous account notifications before loading this account.
+        setNotifications([]);
+
+        const results = await Promise.allSettled([
+  loadEndpoint("/api/transactions"),
+  loadEndpoint("/api/savings"),
+  loadEndpoint("/api/budgets"),
+  loadEndpoint("/api/notifications"),
+  loadEndpoint("/api/debts"),
+  loadEndpoint("/api/debts/overview"),
+]);
+
+        if (controller.signal.aborted) return;
+
+        const errors: string[] = [];
+
+        // Load transactions independently.
+        if (results[0].status === "fulfilled") {
+          const records = Array.isArray(results[0].value.transactions)
+            ? results[0].value.transactions
+            : [];
+
+          const normalized: Transaction[] = records.map((item: any) => ({
+            id: String(item.id),
+            type: item.type,
+            amount: Number(item.amount),
+            category: item.category,
+            description: item.description || "",
+            date: String(item.date).slice(0, 10),
+            createdAt: item.createdAt,
+          }));
+
+          setTransactions(normalized);
+        } else {
+          errors.push("Transactions: " + results[0].reason.message);
+        }
+
+        // Load savings independently.
+        if (results[1].status === "fulfilled") {
+          const records = Array.isArray(results[1].value.goals)
+            ? results[1].value.goals
+            : [];
+
+          const normalized: SavingsGoal[] = records.map((item: any) => ({
+            id: String(item.id),
+            name: item.name,
+            targetAmount: Number(item.targetAmount),
+            savedAmount: Number(item.savedAmount),
+            createdAt: item.createdAt,
+          }));
+
+          setSavingsGoals(normalized);
+        } else {
+          errors.push("Savings: " + results[1].reason.message);
+        }
+
+        // Load budgets independently.
+        if (results[2].status === "fulfilled") {
+          const records = Array.isArray(results[2].value.budgets)
+            ? results[2].value.budgets
+            : [];
+
+          const normalized: Budget[] = records.map((item: any) => ({
+            id: String(item.id),
+            category: item.category,
+            limitAmount: Number(item.limitAmount),
+            month: item.month,
+            createdAt: item.createdAt,
+          }));
+
+          setBudgets(normalized);
+        } else {
+          errors.push("Budgets: " + results[2].reason.message);
+        }
+
+        // Load notifications belonging to the authenticated account.
+        if (results[3].status === "fulfilled") {
+          const records = Array.isArray(results[3].value.notifications)
+            ? results[3].value.notifications
+            : [];
+
+          const normalized: AppNotification[] = records.map((item: any) => ({
+            id: String(item.id),
+            title: item.title,
+            message: item.message,
+            createdAt: item.createdAt,
+            read: Boolean(item.read),
+            level: item.level,
+          }));
+
+          setNotifications(normalized);
+        } else {
+          errors.push("Notifications: " + results[3].reason.message);
+        }
+        // Load debts
+if (results[4].status === "fulfilled") {
+  const records = Array.isArray(results[4].value.debts)
+    ? results[4].value.debts
+    : [];
+
+  const normalized: Debt[] = records.map((item: any) => ({
+    id: String(item.id),
+    userId: String(item.userId),
+    personName: item.personName,
+    type: item.type,
+    principalAmount: Number(item.principalAmount),
+    paidAmount: Number(item.paidAmount),
+    description: item.description || "",
+    startDate: String(item.startDate).slice(0, 10),
+    dueDate: item.dueDate
+      ? String(item.dueDate).slice(0, 10)
+      : null,
+    status: item.status,
+    createdAt: item.createdAt,
+    updatedAt: item.updatedAt,
+    payments: Array.isArray(item.payments)
+      ? item.payments.map((payment: any) => ({
+          id: String(payment.id),
+          debtId: String(payment.debtId),
+          userId: String(payment.userId),
+          amount: Number(payment.amount),
+          paymentDate: String(payment.paymentDate).slice(0, 10),
+          note: payment.note || "",
+          createdAt: payment.createdAt,
+        }))
+      : [],
+    remainingAmount: Number(item.remainingAmount),
+  }));
+
+  setDebts(normalized);
+} else {
+  errors.push("Debts: " + String(results[4].reason));
+}
+
+if (results[5].status === "fulfilled") {
+  setDebtOverview(results[5].value.summary);
+} else {
+  errors.push("Debt overview: " + String(results[5].reason));
+}
+// Load debt overview
+if (results[5].status === "fulfilled") {
+  setDebtOverview(results[5].value.summary);
+} else {
+  errors.push("Debt overview: " + String(results[5].reason));
+}
+
+        if (errors.some(message => message.includes("SESSION_EXPIRED"))) {
+          setIsAuthenticated(false);
+          localStorage.removeItem("fintrack_token");
+          localStorage.removeItem("fintrack_user");
+          sessionStorage.removeItem("fintrack_token");
+          sessionStorage.removeItem("fintrack_user");
+          setTransactions([]);
+          setSavingsGoals([]);
+          setBudgets([]);
+          setNotifications([]);
+          setDebts([]);
+setDebtOverview({
+  totalBorrowed: 0,
+  totalLent: 0,
+  remainingBorrowed: 0,
+  remainingLent: 0,
+});
+          return;
+        }
+
+        if (errors.length > 0) {
+          setError(errors.join(" | "));
+        }
+
+      } catch (error) {
+        if (error instanceof Error && error.name === "AbortError") return;
+
+        console.error("Database loading error:", error);
+
+        if (!controller.signal.aborted) {
+          setError(
+            error instanceof Error
+              ? error.message
+              : "Unable to connect to the database."
+          );
+        }
+      }
+    }
+
+    void loadFromDatabase();
+
+    return () => controller.abort();
+  }, [isAuthenticated]);
+
   // Persist notification and preference data locally as well.
   useEffect(() => {
     try { localStorage.setItem(NOTIFICATIONS_STORAGE_KEY, JSON.stringify(notifications.slice(0, 50))); }
     catch (error) { console.error("Failed to save notifications:", error); }
   }, [notifications]);
 
-  function pushNotification(title: string, message: string, level: AppNotification["level"] = "info") {
-    const entry: AppNotification = {
-      id: crypto.randomUUID(), title, message, createdAt: new Date().toISOString(), read: false, level,
-    };
-    setNotifications(previous => [entry, ...previous].slice(0, 50));
-    setToast(title);
-    window.setTimeout(() => setToast(""), 2600);
-  }
+function pushNotification(
+  title: string,
+  message: string,
+  level: AppNotification["level"] = "info"
+) {
+  const entry: AppNotification = {
+    id: crypto.randomUUID(),
+    title,
+    message,
+    createdAt: new Date().toISOString(),
+    read: false,
+    level,
+  };
+
+  // Show notification immediately
+  setNotifications(previous => [entry, ...previous].slice(0, 50));
+
+  setToast(title);
+  window.setTimeout(() => setToast(""), 2600);
+
+  // Save notification to backend database
+  const token =
+    localStorage.getItem("fintrack_token") ||
+    sessionStorage.getItem("fintrack_token");
+
+  if (!token) return;
+
+  void (async () => {
+    try {
+      const response = await fetch(`${API_URL}/api/notifications`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          title,
+          message,
+          level,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok || !result.success) {
+        throw new Error(
+          result.message || "Unable to save notification."
+        );
+      }
+
+      // Replace temporary notification with database record
+      setNotifications(previous =>
+        previous.map(item =>
+          item.id === entry.id
+            ? {
+                ...result.notification,
+                read: Boolean(result.notification.read),
+              }
+            : item
+        )
+      );
+    } catch (error) {
+      console.error("Notification save error:", error);
+    }
+  })();
+}
 
 
   function exportBackup() {
@@ -253,15 +553,8 @@ function App() {
     setNotifications(previous => previous.map(item => ({ ...item, read: true })));
   }
 
-  // Persist all user data locally
-  useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(transactions));
-    } catch (error) {
-      console.error("Failed to save transactions:", error);
-    }
-  }, [transactions]);
 
+  // Persist all user data locally
   useEffect(() => {
     try {
       localStorage.setItem(BUDGET_STORAGE_KEY, JSON.stringify(budgets));
@@ -293,7 +586,21 @@ function App() {
   );
 
   // Savings are set aside from the available balance, not counted as expenses.
-  const totalBalance = totalIncome - totalExpenses - totalSaved;
+  // Calculate outstanding debt cash impact
+const debtBalance = debts.reduce((total, debt) => {
+  const remaining =
+    Number(debt.principalAmount) - Number(debt.paidAmount);
+
+  return total + (
+    debt.type === "borrowed"
+      ? remaining
+      : -remaining
+  );
+}, 0);
+
+// Calculate available balance
+const totalBalance =
+  totalIncome - totalExpenses - totalSaved + debtBalance;
 
   const sortedTransactions = [...transactions].sort(
     (a, b) =>
@@ -317,6 +624,33 @@ function App() {
     .reduce((sum, item) => sum + item.amount, 0);
 
   const monthlyNet = monthlyIncome - monthlyExpenses;
+  // Previous month calculations
+const previousMonthDate = new Date();
+previousMonthDate.setDate(1);
+previousMonthDate.setMonth(previousMonthDate.getMonth() - 1);
+
+const previousMonth = [
+  previousMonthDate.getFullYear(),
+  String(previousMonthDate.getMonth() + 1).padStart(2, "0"),
+].join("-");
+
+const previousMonthTransactions = transactions.filter(
+  (item) => item.date.startsWith(previousMonth)
+);
+
+
+
+const previousMonthExpenses = previousMonthTransactions
+  .filter((item) => item.type === "expense")
+  .reduce((sum, item) => sum + item.amount, 0);
+
+const expenseChange =
+  previousMonthExpenses > 0
+    ? ((monthlyExpenses - previousMonthExpenses) /
+        previousMonthExpenses) * 100
+    : null;
+
+
 
   const categorySpending = Object.entries(
     monthlyTransactions
@@ -331,6 +665,14 @@ function App() {
       total,
     }))
     .sort((a, b) => b.total - a.total);
+    // Highest spending category
+const highestSpendingCategory = categorySpending[0];
+
+// Category breakdown maximum
+const categoryTotal = Math.max(
+  1,
+  ...categorySpending.map((item) => item.total)
+);
 
   const monthlyTrend = Array.from({ length: chartPeriod }, (_, index) => {
     const monthDate = new Date();
@@ -378,7 +720,7 @@ function App() {
     setError("");
   }
 
-  function handleAddTransaction(event: FormEvent<HTMLFormElement>) {
+  async function handleAddTransaction(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError("");
 
@@ -394,45 +736,266 @@ function App() {
       return;
     }
 
-    const newTransaction: Transaction = {
-      id: crypto.randomUUID(),
-      type,
-      amount: numericAmount,
-      category,
-      description: description.trim(),
-      date,
-      createdAt: new Date().toISOString(),
-    };
+    const token =
+      localStorage.getItem("fintrack_token") ||
+      sessionStorage.getItem("fintrack_token");
 
-    setTransactions((previous) => [newTransaction, ...previous]);
-    pushNotification("Transaction saved", `${type === "income" ? "Income" : "Expense"} of ${formatMoney(numericAmount)} was recorded.`, "success");
-    if (type === "expense") {
-      const matchingBudget = budgets.find(item => item.category === category && item.month === date.slice(0, 7));
-      if (matchingBudget) {
-        const alreadySpent = transactions.filter(item => item.type === "expense" && item.category === category && item.date.startsWith(matchingBudget.month)).reduce((sum, item) => sum + item.amount, 0);
-        const percent = ((alreadySpent + numericAmount) / matchingBudget.limitAmount) * 100;
-        if (percent >= 100) pushNotification("Budget exceeded", `${category} spending has reached ${percent.toFixed(0)}% of its limit.`, "warning");
-        else if (percent >= 80) pushNotification("Budget warning", `${category} spending has reached ${percent.toFixed(0)}% of its limit.`, "warning");
-      }
+    if (!token) {
+      setError("Your session has expired. Please sign in again.");
+      setIsAuthenticated(false);
+      return;
     }
+
+    try {
+      const response = await fetch(`${API_URL}/api/transactions`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          type,
+          amount: numericAmount,
+          category,
+          description: description.trim(),
+          date,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok || !result.success || !result.transaction) {
+        throw new Error(result.message || "Unable to save transaction.");
+      }
+
+      const saved = result.transaction;
+
+      const newTransaction: Transaction = {
+        id: String(saved.id),
+        type: saved.type,
+        amount: Number(saved.amount),
+        category: saved.category,
+        description: saved.description || "",
+        date: String(saved.date).slice(0, 10),
+        createdAt: saved.createdAt,
+      };
+
+      setTransactions(previous => [newTransaction, ...previous]);
+
+      pushNotification(
+        "Transaction saved",
+        `${type === "income" ? "Income" : "Expense"} of ${formatMoney(numericAmount)} was recorded.`,
+        "success"
+      );
+
+      if (type === "expense") {
+        const matchingBudget = budgets.find(
+          item => item.category === category && item.month === date.slice(0, 7)
+        );
+
+        if (matchingBudget) {
+          const alreadySpent = transactions
+            .filter(
+              item =>
+                item.type === "expense" &&
+                item.category === category &&
+                item.date.startsWith(matchingBudget.month)
+            )
+            .reduce((sum, item) => sum + item.amount, 0);
+
+          const percent =
+            ((alreadySpent + numericAmount) / matchingBudget.limitAmount) * 100;
+
+          if (percent >= 100) {
+            pushNotification(
+              "Budget exceeded",
+              `${category} spending has reached ${percent.toFixed(0)}% of its limit.`,
+              "warning"
+            );
+          } else if (percent >= 80) {
+            pushNotification(
+              "Budget warning",
+              `${category} spending has reached ${percent.toFixed(0)}% of its limit.`,
+              "warning"
+            );
+          }
+        }
+      }
+
+      setAmount("");
+      setDescription("");
+      setDate(getToday());
+
+    } catch (error) {
+      console.error("Add transaction error:", error);
+      setError(
+        error instanceof Error
+          ? error.message
+          : "Unable to connect to the server."
+      );
+    }
+  }
+
+  function startEditTransaction(item: Transaction) {
+    setEditingTransactionId(item.id);
+    setType(item.type);
+    setAmount(String(item.amount));
+    setCategory(item.category);
+    setDescription(item.description);
+    setDate(item.date);
+    setError("");
+    setActivePage("transactions");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function cancelEditTransaction() {
+    setEditingTransactionId(null);
     setAmount("");
     setDescription("");
     setDate(getToday());
+    setType("expense");
+    setCategory(categories.expense[0]);
+    setError("");
   }
 
-  function handleDeleteTransaction(id: string) {
+  async function handleUpdateTransaction(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError("");
+
+    const numericAmount = Number(amount);
+
+    if (!editingTransactionId) return;
+
+    if (!Number.isSafeInteger(numericAmount) || numericAmount <= 0) {
+      setError("Please enter a valid positive MMK amount.");
+      return;
+    }
+
+    const token =
+      localStorage.getItem("fintrack_token") ||
+      sessionStorage.getItem("fintrack_token");
+
+    if (!token) {
+      setError("Your session has expired. Please sign in again.");
+      setIsAuthenticated(false);
+      return;
+    }
+
+    try {
+      const response = await fetch(
+        `${API_URL}/api/transactions/${encodeURIComponent(editingTransactionId)}`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            type,
+            amount: numericAmount,
+            category,
+            description: description.trim(),
+            date,
+          }),
+        }
+      );
+
+      const result = await response.json();
+
+      if (!response.ok || !result.success || !result.transaction) {
+        throw new Error(result.message || "Unable to update transaction.");
+      }
+
+      const saved = result.transaction;
+
+      const updatedTransaction: Transaction = {
+        id: String(saved.id),
+        type: saved.type,
+        amount: Number(saved.amount),
+        category: saved.category,
+        description: saved.description || "",
+        date: String(saved.date).slice(0, 10),
+        createdAt: saved.createdAt,
+      };
+
+      setTransactions(previous =>
+        previous.map(item =>
+          item.id === editingTransactionId ? updatedTransaction : item
+        )
+      );
+
+      cancelEditTransaction();
+
+      pushNotification(
+        "Transaction updated",
+        "Your transaction has been updated successfully.",
+        "success"
+      );
+
+    } catch (error) {
+      console.error("Update transaction error:", error);
+      setError(
+        error instanceof Error
+          ? error.message
+          : "Unable to connect to the server."
+      );
+    }
+  }
+
+  async function handleDeleteTransaction(id: string) {
     if (!window.confirm("Are you sure you want to delete this transaction?")) {
       return;
     }
 
-    setTransactions((previous) =>
-      previous.filter((item) => item.id !== id)
-    );
-    pushNotification("Transaction deleted", "The selected transaction was removed.", "info");
+    const token =
+      localStorage.getItem("fintrack_token") ||
+      sessionStorage.getItem("fintrack_token");
+
+    if (!token) {
+      setError("Your session has expired. Please sign in again.");
+      setIsAuthenticated(false);
+      return;
+    }
+
+    try {
+      const response = await fetch(`${API_URL}/api/transactions/${encodeURIComponent(id)}`, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      const result = await response.json();
+
+      if (!response.ok || !result.success) {
+        throw new Error(result.message || "Unable to delete transaction.");
+      }
+
+      setTransactions(previous =>
+        previous.filter(item => item.id !== id)
+      );
+
+      pushNotification(
+        "Transaction deleted",
+        "The selected transaction was permanently removed.",
+        "success"
+      );
+
+    } catch (error) {
+      console.error("Delete transaction error:", error);
+
+      pushNotification(
+        "Delete failed",
+        error instanceof Error
+          ? error.message
+          : "Unable to connect to the server.",
+        "warning"
+      );
+    }
   }
 
   // Budget handlers
-  function handleAddBudget() {
+  async function handleAddBudget() {
     const limit = Number(budgetAmount);
 
     if (!budgetAmount.trim() || !Number.isSafeInteger(limit) || limit <= 0) {
@@ -440,34 +1003,72 @@ function App() {
       return;
     }
 
-    const existing = budgets.find(
-      (item) =>
-        item.category === budgetCategory && item.month === budgetMonth
-    );
+    const token =
+      localStorage.getItem("fintrack_token") ||
+      sessionStorage.getItem("fintrack_token");
 
-    if (existing) {
-      setBudgets((previous) =>
-        previous.map((item) =>
-          item.id === existing.id ? { ...item, limitAmount: limit } : item
-        )
-      );
-    } else {
-      const newBudget: Budget = {
-        id: crypto.randomUUID(),
-        category: budgetCategory,
-        limitAmount: limit,
-        month: budgetMonth,
-        createdAt: new Date().toISOString(),
-      };
-
-      setBudgets((previous) => [...previous, newBudget]);
+    if (!token) {
+      window.alert("Your session has expired. Please sign in again.");
+      setIsAuthenticated(false);
+      return;
     }
 
-    pushNotification("Budget saved", `${budgetCategory} budget for ${budgetMonth} has been saved.`, "success");
-    setBudgetAmount("");
+    try {
+      const response = await fetch(`${API_URL}/api/budgets`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          category: budgetCategory,
+          limitAmount: limit,
+          month: budgetMonth,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok || !result.success || !result.budget) {
+        throw new Error(result.message || "Unable to save budget.");
+      }
+
+      const saved = result.budget;
+
+      const newBudget: Budget = {
+        id: String(saved.id),
+        category: saved.category,
+        limitAmount: Number(saved.limitAmount),
+        month: saved.month,
+        createdAt: saved.createdAt,
+      };
+
+      setBudgets(previous => [
+        ...previous.filter(
+          item => !(item.category === newBudget.category &&
+                    item.month === newBudget.month)
+        ),
+        newBudget,
+      ]);
+
+      pushNotification(
+        "Budget saved",
+        `${budgetCategory} budget for ${budgetMonth} has been saved.`,
+        "success"
+      );
+
+      setBudgetAmount("");
+    } catch (error) {
+      console.error("Add budget error:", error);
+      window.alert(
+        error instanceof Error
+          ? error.message
+          : "Unable to connect to the server."
+      );
+    }
   }
 
-  function handleEditBudget(budget: Budget) {
+  async function handleEditBudget(budget: Budget) {
     const input = window.prompt(
       "Enter new budget limit:",
       String(budget.limitAmount)
@@ -482,25 +1083,119 @@ function App() {
       return;
     }
 
-    setBudgets((previous) =>
-      previous.map((item) =>
-        item.id === budget.id ? { ...item, limitAmount: newLimit } : item
-      )
-    );
-    pushNotification("Budget updated", `${budget.category} budget limit was updated.`, "success");
+    const token =
+      localStorage.getItem("fintrack_token") ||
+      sessionStorage.getItem("fintrack_token");
+
+    if (!token) {
+      window.alert("Your session has expired. Please sign in again.");
+      setIsAuthenticated(false);
+      return;
+    }
+
+    try {
+      const response = await fetch(
+        `${API_URL}/api/budgets/${encodeURIComponent(budget.id)}`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            limitAmount: newLimit,
+          }),
+        }
+      );
+
+      const result = await response.json();
+
+      if (!response.ok || !result.success || !result.budget) {
+        throw new Error(result.message || "Unable to update budget.");
+      }
+
+      const saved = result.budget;
+
+      const updatedBudget: Budget = {
+        id: String(saved.id),
+        category: saved.category,
+        limitAmount: Number(saved.limitAmount),
+        month: saved.month,
+        createdAt: saved.createdAt,
+      };
+
+      setBudgets(previous =>
+        previous.map(item =>
+          item.id === budget.id ? updatedBudget : item
+        )
+      );
+
+      pushNotification(
+        "Budget updated",
+        `${budget.category} budget limit was updated.`,
+        "success"
+      );
+    } catch (error) {
+      console.error("Edit budget error:", error);
+      window.alert(
+        error instanceof Error
+          ? error.message
+          : "Unable to connect to the server."
+      );
+    }
   }
 
-  function handleDeleteBudget(id: string) {
+  async function handleDeleteBudget(id: string) {
     if (!window.confirm("Delete this budget?")) return;
 
-    setBudgets((previous) =>
-      previous.filter((item) => item.id !== id)
-    );
-    pushNotification("Budget deleted", "The selected budget was removed.", "info");
+    const token =
+      localStorage.getItem("fintrack_token") ||
+      sessionStorage.getItem("fintrack_token");
+
+    if (!token) {
+      window.alert("Your session has expired. Please sign in again.");
+      setIsAuthenticated(false);
+      return;
+    }
+
+    try {
+      const response = await fetch(
+        `${API_URL}/api/budgets/${encodeURIComponent(id)}`,
+        {
+          method: "DELETE",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      const result = await response.json();
+
+      if (!response.ok || !result.success) {
+        throw new Error(result.message || "Unable to delete budget.");
+      }
+
+      setBudgets(previous =>
+        previous.filter(item => item.id !== id)
+      );
+
+      pushNotification(
+        "Budget deleted",
+        "The selected budget was permanently removed.",
+        "success"
+      );
+    } catch (error) {
+      console.error("Delete budget error:", error);
+      window.alert(
+        error instanceof Error
+          ? error.message
+          : "Unable to connect to the server."
+      );
+    }
   }
 
   // Savings handlers
-  function handleAddSavingsGoal() {
+  async function handleAddSavingsGoal() {
     setSavingsError("");
 
     const name = goalName.trim();
@@ -516,31 +1211,73 @@ function App() {
       return;
     }
 
-    const newGoal: SavingsGoal = {
-      id: crypto.randomUUID(),
-      name,
-      targetAmount: target,
-      savedAmount: 0,
-      createdAt: new Date().toISOString(),
-    };
+    const token =
+      localStorage.getItem("fintrack_token") ||
+      sessionStorage.getItem("fintrack_token");
 
-    setSavingsGoals((previous) => [...previous, newGoal]);
-    pushNotification("Savings goal created", `${name} is ready to track.`, "success");
-    setGoalName("");
-    setGoalTarget("");
+    if (!token) {
+      setSavingsError("Your session has expired. Please sign in again.");
+      setIsAuthenticated(false);
+      return;
+    }
+
+    try {
+      const response = await fetch(`${API_URL}/api/savings`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          name,
+          targetAmount: target,
+          savedAmount: 0,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok || !result.success || !result.goal) {
+        throw new Error(result.message || "Unable to create savings goal.");
+      }
+
+      const saved = result.goal;
+
+      const newGoal: SavingsGoal = {
+        id: String(saved.id),
+        name: saved.name,
+        targetAmount: Number(saved.targetAmount),
+        savedAmount: Number(saved.savedAmount),
+        createdAt: saved.createdAt,
+      };
+
+      setSavingsGoals(previous => [...previous, newGoal]);
+
+      pushNotification(
+        "Savings goal created",
+        `${name} is ready to track.`,
+        "success"
+      );
+
+      setGoalName("");
+      setGoalTarget("");
+    } catch (error) {
+      console.error("Create savings goal error:", error);
+      setSavingsError(
+        error instanceof Error
+          ? error.message
+          : "Unable to connect to the server."
+      );
+    }
   }
 
-  function handleAddSavings(goal: SavingsGoal) {
+  async function handleAddSavings(goal: SavingsGoal) {
     const input = window.prompt(`Add savings for ${goal.name} (MMK):`);
     if (input === null) return;
 
     const savingsAmount = Number(input);
 
-    if (
-      !input.trim() ||
-      !Number.isSafeInteger(savingsAmount) ||
-      savingsAmount <= 0
-    ) {
+    if (!input.trim() || !Number.isSafeInteger(savingsAmount) || savingsAmount <= 0) {
       window.alert("Enter a valid amount.");
       return;
     }
@@ -559,34 +1296,92 @@ function App() {
       return;
     }
 
-    setSavingsGoals((previous) =>
-      previous.map((item) =>
-        item.id === goal.id
-          ? { ...item, savedAmount: item.savedAmount + savingsAmount }
-          : item
-      )
-    );
-    const newTotal = goal.savedAmount + savingsAmount;
-    if (newTotal >= goal.targetAmount && goal.savedAmount < goal.targetAmount) {
-      pushNotification("Savings goal reached", `Congratulations! You completed ${goal.name}.`, "success");
-    } else if (newTotal / goal.targetAmount >= 0.5 && goal.savedAmount / goal.targetAmount < 0.5) {
-      pushNotification("Savings milestone", `You've reached 50% of ${goal.name}.`, "success");
-    } else {
-      pushNotification("Savings updated", `${formatMoney(savingsAmount)} added to ${goal.name}.`, "success");
+    const token =
+      localStorage.getItem("fintrack_token") ||
+      sessionStorage.getItem("fintrack_token");
+
+    if (!token) {
+      window.alert("Your session has expired. Please sign in again.");
+      setIsAuthenticated(false);
+      return;
+    }
+
+    try {
+      const response = await fetch(
+        `${API_URL}/api/savings/${encodeURIComponent(goal.id)}`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            savedAmount: goal.savedAmount + savingsAmount,
+          }),
+        }
+      );
+
+      const result = await response.json();
+
+      if (!response.ok || !result.success || !result.goal) {
+        throw new Error(result.message || "Unable to add savings.");
+      }
+
+      const saved = result.goal;
+
+      const updatedGoal: SavingsGoal = {
+        id: String(saved.id),
+        name: saved.name,
+        targetAmount: Number(saved.targetAmount),
+        savedAmount: Number(saved.savedAmount),
+        createdAt: saved.createdAt,
+      };
+
+      setSavingsGoals(previous =>
+        previous.map(item => item.id === goal.id ? updatedGoal : item)
+      );
+
+      const newTotal = updatedGoal.savedAmount;
+
+      if (newTotal >= updatedGoal.targetAmount && goal.savedAmount < goal.targetAmount) {
+        pushNotification(
+          "Savings goal reached",
+          `Congratulations! You completed ${goal.name}.`,
+          "success"
+        );
+      } else if (
+        newTotal / updatedGoal.targetAmount >= 0.5 &&
+        goal.savedAmount / goal.targetAmount < 0.5
+      ) {
+        pushNotification(
+          "Savings milestone",
+          `You've reached 50% of ${goal.name}.`,
+          "success"
+        );
+      } else {
+        pushNotification(
+          "Savings updated",
+          `${formatMoney(savingsAmount)} added to ${goal.name}.`,
+          "success"
+        );
+      }
+    } catch (error) {
+      console.error("Add savings error:", error);
+      window.alert(
+        error instanceof Error
+          ? error.message
+          : "Unable to connect to the server."
+      );
     }
   }
 
-  function handleWithdrawSavings(goal: SavingsGoal) {
+  async function handleWithdrawSavings(goal: SavingsGoal) {
     const input = window.prompt(`Withdraw from ${goal.name} (MMK):`);
     if (input === null) return;
 
     const withdrawalAmount = Number(input);
 
-    if (
-      !input.trim() ||
-      !Number.isSafeInteger(withdrawalAmount) ||
-      withdrawalAmount <= 0
-    ) {
+    if (!input.trim() || !Number.isSafeInteger(withdrawalAmount) || withdrawalAmount <= 0) {
       window.alert("Enter a valid amount.");
       return;
     }
@@ -596,29 +1391,437 @@ function App() {
       return;
     }
 
-    setSavingsGoals((previous) =>
-      previous.map((item) =>
-        item.id === goal.id
-          ? { ...item, savedAmount: item.savedAmount - withdrawalAmount }
-          : item
-      )
-    );
-    pushNotification("Savings withdrawn", `${formatMoney(withdrawalAmount)} withdrawn from ${goal.name}.`, "info");
+    const token =
+      localStorage.getItem("fintrack_token") ||
+      sessionStorage.getItem("fintrack_token");
+
+    if (!token) {
+      window.alert("Your session has expired. Please sign in again.");
+      setIsAuthenticated(false);
+      return;
+    }
+
+    try {
+      const response = await fetch(
+        `${API_URL}/api/savings/${encodeURIComponent(goal.id)}`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            savedAmount: goal.savedAmount - withdrawalAmount,
+          }),
+        }
+      );
+
+      const result = await response.json();
+
+      if (!response.ok || !result.success || !result.goal) {
+        throw new Error(result.message || "Unable to withdraw savings.");
+      }
+
+      const saved = result.goal;
+
+      const updatedGoal: SavingsGoal = {
+        id: String(saved.id),
+        name: saved.name,
+        targetAmount: Number(saved.targetAmount),
+        savedAmount: Number(saved.savedAmount),
+        createdAt: saved.createdAt,
+      };
+
+      setSavingsGoals(previous =>
+        previous.map(item => item.id === goal.id ? updatedGoal : item)
+      );
+
+      pushNotification(
+        "Savings withdrawn",
+        `${formatMoney(withdrawalAmount)} withdrawn from ${goal.name}.`,
+        "info"
+      );
+    } catch (error) {
+      console.error("Withdraw savings error:", error);
+      window.alert(
+        error instanceof Error
+          ? error.message
+          : "Unable to connect to the server."
+      );
+    }
   }
 
-  function handleDeleteSavingsGoal(id: string) {
+  async function handleDeleteSavingsGoal(id: string) {
     if (!window.confirm("Delete this savings goal?")) return;
 
-    setSavingsGoals((previous) =>
-      previous.filter((item) => item.id !== id)
-    );
-    pushNotification("Savings goal deleted", "The selected savings goal was removed.", "info");
+    const token =
+      localStorage.getItem("fintrack_token") ||
+      sessionStorage.getItem("fintrack_token");
+
+    if (!token) {
+      window.alert("Your session has expired. Please sign in again.");
+      setIsAuthenticated(false);
+      return;
+    }
+
+    try {
+      const response = await fetch(
+        `${API_URL}/api/savings/${encodeURIComponent(id)}`,
+        {
+          method: "DELETE",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      const result = await response.json();
+
+      if (!response.ok || !result.success) {
+        throw new Error(result.message || "Unable to delete savings goal.");
+      }
+
+      setSavingsGoals(previous =>
+        previous.filter(item => item.id !== id)
+      );
+
+      pushNotification(
+        "Savings goal deleted",
+        "The selected savings goal was permanently removed.",
+        "success"
+      );
+    } catch (error) {
+      console.error("Delete savings goal error:", error);
+      window.alert(
+        error instanceof Error
+          ? error.message
+          : "Unable to connect to the server."
+      );
+    }
   }
+  async function refreshDebts() {
+  const token =
+    localStorage.getItem("fintrack_token") ||
+    sessionStorage.getItem("fintrack_token");
+
+  if (!token) {
+    setDebtError("Session expired. Please sign in again.");
+    return;
+  }
+
+  setDebtLoading(true);
+  setDebtError("");
+
+  try {
+    const headers = {
+      Authorization: `Bearer ${token}`,
+    };
+
+    const [debtsResponse, overviewResponse] = await Promise.all([
+      fetch(`${API_URL}/api/debts`, { headers }),
+      fetch(`${API_URL}/api/debts/overview`, { headers }),
+    ]);
+
+    const [debtsResult, overviewResult] = await Promise.all([
+      debtsResponse.json(),
+      overviewResponse.json(),
+    ]);
+
+    if (!debtsResponse.ok || !debtsResult.success) {
+      throw new Error(debtsResult.message || "Unable to load debts.");
+    }
+
+    if (!overviewResponse.ok || !overviewResult.success) {
+      throw new Error(overviewResult.message || "Unable to load debt overview.");
+    }
+
+    const normalized: Debt[] = debtsResult.debts.map((item: any) => ({
+      id: String(item.id),
+      userId: String(item.userId),
+      personName: item.personName,
+      type: item.type,
+      principalAmount: Number(item.principalAmount),
+      paidAmount: Number(item.paidAmount),
+      description: item.description || "",
+      startDate: String(item.startDate).slice(0, 10),
+      dueDate: item.dueDate
+        ? String(item.dueDate).slice(0, 10)
+        : null,
+      status: item.status,
+      archivedAt: item.archivedAt
+  ? String(item.archivedAt)
+  : null,
+      createdAt: item.createdAt,
+      updatedAt: item.updatedAt,
+      payments: (item.payments || []).map((payment: any) => ({
+        id: String(payment.id),
+        debtId: String(payment.debtId),
+        userId: String(payment.userId),
+        amount: Number(payment.amount),
+        paymentDate: String(payment.paymentDate).slice(0, 10),
+        note: payment.note || "",
+        createdAt: payment.createdAt,
+      })),
+      remainingAmount: Number(item.remainingAmount),
+    }));
+
+    setDebts(normalized);
+    setDebtOverview(overviewResult.summary);
+
+  } catch (error) {
+    setDebtError(
+      error instanceof Error
+        ? error.message
+        : "Unable to load debt information."
+    );
+  } finally {
+    setDebtLoading(false);
+  }
+}
+const activeDebts = debts.filter(
+  debt => debt.status !== "paid" && !debt.archivedAt
+);
+
+const completedDebts = debts.filter(
+  debt => debt.status === "paid" && !debt.archivedAt
+);
+
+const archivedDebts = debts.filter(
+  debt => Boolean(debt.archivedAt)
+);
+
+const visibleDebts =
+  debtTab === "active"
+    ? activeDebts
+    : debtTab === "completed"
+      ? completedDebts
+      : archivedDebts;
+async function handleCreateDebt(event: FormEvent<HTMLFormElement>) {
+  event.preventDefault();
+  setDebtError("");
+
+  const numericAmount = Number(debtPrincipalAmount);
+  console.log("DEBT AMOUNT DEBUG:", {
+  inputValue: debtPrincipalAmount,
+  numericAmount,
+  expectedAmount: 80000,
+});
+
+  if (!debtPersonName.trim()) {
+    setDebtError("Please enter the person's name.");
+    return;
+  }
+
+  if (!Number.isSafeInteger(numericAmount) || numericAmount <= 0) {
+    setDebtError("Enter a valid debt amount.");
+    return;
+  }
+
+  const token =
+    localStorage.getItem("fintrack_token") ||
+    sessionStorage.getItem("fintrack_token");
+
+  if (!token) {
+    setDebtError("Please sign in again.");
+    return;
+  }
+
+  setDebtLoading(true);
+  try {
+    const requestBody = {
+      type: debtType,
+      personName: debtPersonName.trim(),
+      principalAmount: numericAmount,
+      description: debtDescription.trim(),
+      startDate: debtStartDate,
+      dueDate: debtDueDate || null,
+    };
+
+    console.log("DEBT REQUEST DEBUG:", {
+      inputValue: debtPrincipalAmount,
+      numericAmount,
+      requestBody,
+    });
+
+    const response = await fetch(`${API_URL}/api/debts`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(requestBody),
+    });
+
+    const result = await response.json();
+
+    if (!response.ok || !result.success) {
+      throw new Error(result.message || "Unable to create debt.");
+    }
+
+    setDebtPersonName("");
+    setDebtPrincipalAmount("");
+    setDebtDescription("");
+    setDebtStartDate(getToday());
+    setDebtDueDate("");
+
+    await refreshDebts();
+
+    pushNotification(
+      "Debt created",
+      "Your debt record has been saved successfully.",
+      "success"
+    );
+
+  } catch (error) {
+    setDebtError(
+      error instanceof Error ? error.message : "Unable to create debt."
+    );
+    setDebtLoading(false);
+  }
+}
+ async function handleAddDebtPayment(
+  event: FormEvent<HTMLFormElement>,
+  debtId: string
+) {
+  event.preventDefault();
+
+  const form = event.currentTarget;
+  const formData = new FormData(form);
+
+  const paymentAmount = Number(formData.get("paymentAmount"));
+  const paymentDate = String(formData.get("paymentDate") || "");
+  const note = String(formData.get("paymentNote") || "");
+
+  setPaymentError("");
+
+  if (!Number.isSafeInteger(paymentAmount) || paymentAmount <= 0) {
+    setPaymentError("Enter a valid payment amount.");
+    return;
+  }
+
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(paymentDate)) {
+    setPaymentError("Enter a valid payment date.");
+    return;
+  }
+
+  const token =
+    localStorage.getItem("fintrack_token") ||
+    sessionStorage.getItem("fintrack_token");
+
+  if (!token) {
+    setPaymentError("Please sign in again.");
+    return;
+  }
+
+  setDebtLoading(true);
+
+  try {
+    const response = await fetch(
+      `${API_URL}/api/debts/${encodeURIComponent(debtId)}/payments`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          amount: paymentAmount,
+          paymentDate,
+          note,
+        }),
+      }
+    );
+
+    const result = await response.json();
+
+    if (!response.ok || !result.success) {
+      throw new Error(
+        result.message || "Unable to record payment."
+      );
+    }
+
+    await refreshDebts();
+
+    form.reset();
+
+    setPaymentError("");
+
+    pushNotification(
+      "Payment recorded",
+      "Your payment has been saved successfully.",
+      "success"
+    );
+
+  } catch (error) {
+    setPaymentError(
+      error instanceof Error
+        ? error.message
+        : "Unable to record payment."
+    );
+  } finally {
+    setDebtLoading(false);
+  }
+}
+async function updateDebtArchive(
+  debtId: string,
+  action: "archive" | "restore"
+) {
+  const token =
+    localStorage.getItem("fintrack_token") ||
+    sessionStorage.getItem("fintrack_token");
+
+  if (!token) {
+    setDebtError("Please sign in again.");
+    return;
+  }
+
+  setDebtLoading(true);
+  setDebtError("");
+
+  try {
+    const response = await fetch(
+      `${API_URL}/api/debts/${encodeURIComponent(debtId)}/${action}`,
+      {
+        method: "PATCH",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    );
+
+    const result = await response.json();
+
+    if (!response.ok || !result.success) {
+      throw new Error(result.message || "Unable to update debt.");
+    }
+
+    await refreshDebts();
+
+    pushNotification(
+      action === "archive" ? "Debt archived" : "Debt restored",
+      action === "archive"
+        ? "Completed debt moved to archive."
+        : "Debt restored successfully.",
+      "success"
+    );
+  } catch (error) {
+    setDebtError(
+      error instanceof Error ? error.message : "Unable to update debt."
+    );
+  } finally {
+    setDebtLoading(false);
+  }
+}
 
   const pageTitles: Record<
     Page,
     { eyebrow: string; title: string; description: string }
   > = {
+    debts: {
+  eyebrow: "DEBT MANAGEMENT",
+  title: "Debt Management",
+  description: "Manage money you owe and money owed to you.",
+},
     dashboard: {
       eyebrow: "OVERVIEW",
       title: "Good to see you again",
@@ -655,6 +1858,11 @@ function App() {
   });
   const recentTransactions = filteredTransactions.slice(0, 5);
 
+
+  if (!isAuthenticated) {
+    return <Login onLogin={() => setIsAuthenticated(true)} />;
+  }
+
   return (
     <div className="app-shell fintrack-theme">
       <aside className="sidebar">
@@ -679,7 +1887,19 @@ function App() {
           <button title="Transactions" aria-label="Transactions" className={activePage === "transactions" ? "nav-item active" : "nav-item"} onClick={() => setActivePage("transactions")}><span className="nav-icon">⇄</span></button>
           <button title="Budgets" aria-label="Budgets" className={activePage === "budgets" ? "nav-item active" : "nav-item"} onClick={() => setActivePage("budgets")}><span className="nav-icon">▦</span></button>
           <button title="Savings goals" aria-label="Savings goals" className={activePage === "savings" ? "nav-item active" : "nav-item"} onClick={() => setActivePage("savings")}><span className="nav-icon">◇</span></button>
-          <button title="Analytics" aria-label="Analytics" className={activePage === "analytics" ? "nav-item active" : "nav-item"} onClick={() => setActivePage("analytics")}><span className="nav-icon">▥</span></button>
+          <button
+  title="Debt Management"
+  aria-label="Debt Management"
+  className={
+    activePage === "debts"
+      ? "nav-item active"
+      : "nav-item"
+  }
+  onClick={() => setActivePage("debts")}
+>
+  <span className="nav-icon">⇄</span>
+</button>
+<button title="Analytics" aria-label="Analytics" className={activePage === "analytics" ? "nav-item active" : "nav-item"} onClick={() => setActivePage("analytics")}><span className="nav-icon">▥</span></button>
         </nav>
         <div className="sidebar-spacer" />
         <button className="nav-item sidebar-bottom-icon" title="Settings" aria-label="Open settings" type="button" onClick={() => setSettingsOpen(true)}><span className="nav-icon">⚙</span></button>
@@ -702,8 +1922,8 @@ function App() {
             <button className="topbar-action" type="button" onClick={() => setActivePage("transactions")} title="Add transaction" aria-label="Add transaction">＋</button>
             <button className="topbar-action notification-trigger" type="button" onClick={() => { setNotificationOpen(value => !value); setProfileOpen(false); }} title="Notifications" aria-label="Open notifications">♧{notifications.some(item => !item.read) && <i className="notification-count">{notifications.filter(item => !item.read).length}</i>}</button>
             <button className="profile-trigger" type="button" onClick={() => { setProfileOpen(value => !value); setNotificationOpen(false); }} aria-label="Open profile menu">
-              <span className="profile-avatar">F</span>
-              <span className="profile-copy"><strong>FinTrack Member</strong><small>Personal account</small></span>
+              <span className="profile-avatar">{avatarLetter}</span>
+              <span className="profile-copy"><strong>{displayName}</strong><small>{displayEmail}</small></span>
               <span className="profile-chevron">⌄</span>
             </button>
           </div>
@@ -717,7 +1937,14 @@ function App() {
           <div className="notification-panel-footer"><button type="button" className="text-button" onClick={markAllNotificationsRead}>Mark all as read</button><button type="button" className="text-button" onClick={() => setNotifications([])}>Clear all</button></div>
         </div>}
 
-        {profileOpen && <div className="floating-panel profile-panel" role="menu"><div className="profile-menu-heading"><span className="profile-avatar">F</span><div><strong>FinTrack Member</strong><small>Local personal account</small></div></div><button type="button" onClick={() => { setProfileOpen(false); setSettingsOpen(true); }}>⚙ Account preferences</button><button type="button" onClick={() => { setProfileOpen(false); exportBackup(); }}>↓ Export data backup</button><button type="button" onClick={() => { setProfileOpen(false); pushNotification("Account system", "Login and registration will be added in a later phase.", "info"); }}>＋ Account system (coming later)</button></div>}
+        {profileOpen && <div className="floating-panel profile-panel" role="menu"><div className="profile-menu-heading"><span className="profile-avatar">{avatarLetter}</span><div><strong>{displayName}</strong><small>{displayEmail}</small></div></div><button type="button" onClick={() => { setProfileOpen(false); setSettingsOpen(true); }}>⚙ Account preferences</button><button type="button" onClick={() => { setProfileOpen(false); exportBackup(); }}>↓ Export data backup</button><button type="button" onClick={() => {
+  localStorage.removeItem("fintrack_token");
+  localStorage.removeItem("fintrack_user");
+  sessionStorage.removeItem("fintrack_token");
+  sessionStorage.removeItem("fintrack_user");
+  setProfileOpen(false);
+  setIsAuthenticated(false);
+}}>↪ Sign out</button></div>}
 
         {settingsOpen && <div className="modal-backdrop" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget) setSettingsOpen(false); }}><section className="settings-modal" role="dialog" aria-modal="true" aria-labelledby="settings-title"><div className="floating-panel-head"><div><span className="eyebrow">PREFERENCES</span><h2 id="settings-title">FinTrack settings</h2><small>Manage alerts and your local data.</small></div><button type="button" className="panel-close" onClick={() => setSettingsOpen(false)}>×</button></div><div className="settings-option"><div><strong>In-app notifications</strong><p>Budget warnings, saved transactions and savings milestones appear in your FinTrack notification center.</p></div><span className="settings-enabled">Always on</span></div><div className="settings-actions"><button type="button" className="secondary-button" onClick={exportBackup}>Export backup</button><label className="secondary-button import-button">Import backup<input type="file" accept="application/json,.json" onChange={event => { importBackup(event.target.files?.[0]); event.currentTarget.value = ""; }} /></label></div><p className="settings-note">Your data is currently stored in this browser on this device. Account sync and cloud backup are not enabled yet.</p></section></div>}
 
@@ -779,6 +2006,123 @@ function App() {
                   <article className="metric-card metric-card-expense"><div className="metric-top"><span className="metric-icon expense-icon">↗</span><span className="metric-label">TOTAL EXPENSES</span></div><strong>{formatMoney(totalExpenses)}</strong><small>All recorded expenses</small></article>
                   <article className="metric-card metric-card-savings"><div className="metric-top"><span className="metric-icon savings-icon">◇</span><span className="metric-label">TOTAL SAVED</span></div><strong>{formatMoney(totalSaved)}</strong><small>Across your savings goals</small></article>
                 </div>
+                {/* Monthly Financial Summary */}
+<article className="surface-card monthly-summary-card">
+
+  <div className="section-heading">
+    <div>
+      <span className="eyebrow">MONTHLY OVERVIEW</span>
+      <h2>Financial Summary</h2>
+      <p>
+        {new Date(`${currentMonth}-01T00:00:00`)
+          .toLocaleDateString("en-US", {
+            month: "long",
+            year: "numeric",
+          })}
+      </p>
+    </div>
+  </div>
+
+  <div className="monthly-summary-grid">
+
+    <div className="monthly-summary-item">
+      <span>Monthly Income</span>
+      <strong className="amount-positive">
+        {formatMoney(monthlyIncome)}
+      </strong>
+    </div>
+
+    <div className="monthly-summary-item">
+      <span>Monthly Expenses</span>
+      <strong className="amount-negative">
+        {formatMoney(monthlyExpenses)}
+      </strong>
+    </div>
+
+    <div className="monthly-summary-item">
+      <span>Remaining Balance</span>
+      <strong className={monthlyNet >= 0
+        ? "amount-positive"
+        : "amount-negative"
+      }>
+        {formatMoney(monthlyNet)}
+      </strong>
+    </div>
+
+    <div className="monthly-summary-item">
+      <span>Highest Spending</span>
+      <strong>
+        {highestSpendingCategory
+          ? highestSpendingCategory.category
+          : "No expenses"}
+      </strong>
+      <small>
+        {highestSpendingCategory
+          ? formatMoney(highestSpendingCategory.total)
+          : ""}
+      </small>
+    </div>
+
+  </div>
+
+  <div className="monthly-comparison">
+    <div>
+      <span className="eyebrow">PREVIOUS MONTH COMPARISON</span>
+      <p>
+        Last month expenses:
+        <strong>{formatMoney(previousMonthExpenses)}</strong>
+      </p>
+    </div>
+
+    {expenseChange !== null ? (
+      <span className={
+        expenseChange > 0
+          ? "comparison-badge danger"
+          : expenseChange < 0
+            ? "comparison-badge good"
+            : "comparison-badge"
+      }>
+        {expenseChange > 0 ? "↑ " : expenseChange < 0 ? "↓ " : ""}
+        {Math.abs(expenseChange).toFixed(1)}%
+      </span>
+    ) : (
+      <span className="comparison-badge">
+        No previous data
+      </span>
+    )}
+  </div>
+
+  <div className="category-breakdown">
+    <h3>Spending by Category</h3>
+
+    {categorySpending.length === 0 ? (
+      <p className="empty-state">
+        No expenses recorded this month.
+      </p>
+    ) : (
+      categorySpending.map((item) => (
+        <div className="category-breakdown-item" key={item.category}>
+
+          <div className="category-breakdown-head">
+            <strong>{item.category}</strong>
+            <span>{formatMoney(item.total)}</span>
+          </div>
+
+          <div className="progress-track">
+            <div
+              className="progress-fill"
+              style={{
+                width: `${(item.total / categoryTotal) * 100}%`,
+              }}
+            />
+          </div>
+
+        </div>
+      ))
+    )}
+  </div>
+
+</article>
 
                 <article className="surface-card investment-card">
                   <div className="section-heading"><div><span className="eyebrow">CASH FLOW OVERVIEW</span><h2>Income & expenses</h2><p>Monthly activity over the last six months</p></div><button className="text-button" onClick={() => setActivePage("analytics")}>Details ↗</button></div>
@@ -809,12 +2153,12 @@ function App() {
               <article className="surface-card form-card">
                 <div className="section-heading">
                   <div>
-                    <h2>Add transaction</h2>
+                    <h2>{editingTransactionId ? "Edit transaction" : "Add transaction"}</h2>
                     <p>Record money coming in or going out.</p>
                   </div>
                 </div>
 
-                <form onSubmit={handleAddTransaction}>
+                <form onSubmit={editingTransactionId ? handleUpdateTransaction : handleAddTransaction}>
                   <div className="form-group">
                     <label htmlFor="type">Transaction type</label>
                     <select
@@ -883,8 +2227,17 @@ function App() {
 
                   {error && <p className="error-message" role="alert">{error}</p>}
                   <button type="submit" className="primary-button full-width">
-                    Save transaction
+                    {editingTransactionId ? "Save changes" : "Save transaction"}
                   </button>
+                  {editingTransactionId && (
+                    <button
+                      type="button"
+                      className="secondary-button full-width"
+                      onClick={cancelEditTransaction}
+                    >
+                      Cancel edit
+                    </button>
+                  )}
                 </form>
               </article>
 
@@ -932,6 +2285,13 @@ function App() {
                             {item.type === "income" ? "+" : "−"}
                             {formatMoney(item.amount)}
                           </strong>
+                          <button
+                            className="text-button"
+                            type="button"
+                            onClick={() => startEditTransaction(item)}
+                          >
+                            Edit
+                          </button>
                           <button
                             className="danger-link"
                             type="button"
@@ -1273,6 +2633,378 @@ function App() {
               )}
             </>
           )}
+          {activePage === "debts" && (
+  <section className="debt-page">
+
+    {/* Overview */}
+    <section className="metric-grid">
+
+      <article className="metric-card metric-card-expense">
+        <span className="metric-label">TOTAL BORROWED</span>
+        <strong>{formatMoney(debtOverview.totalBorrowed)}</strong>
+        <small>Money you owe</small>
+      </article>
+
+      <article className="metric-card metric-card-income">
+        <span className="metric-label">TOTAL LENT</span>
+        <strong>{formatMoney(debtOverview.totalLent)}</strong>
+        <small>Money owed to you</small>
+      </article>
+
+      <article className="metric-card metric-card-expense">
+        <span className="metric-label">REMAINING DEBT</span>
+        <strong>{formatMoney(debtOverview.remainingBorrowed)}</strong>
+        <small>Still to repay</small>
+      </article>
+
+      <article className="metric-card metric-card-savings">
+        <span className="metric-label">EXPECTED TO RECEIVE</span>
+        <strong>{formatMoney(debtOverview.remainingLent)}</strong>
+        <small>Still to collect</small>
+      </article>
+
+    </section>
+
+    {/* Create Debt */}
+    <article className="surface-card form-card">
+
+      <div className="section-heading">
+        <div>
+          <h2>Add new debt</h2>
+          <p>Record borrowed or lent money.</p>
+        </div>
+      </div>
+
+      <form onSubmit={handleCreateDebt}>
+
+        <div className="form-group">
+          <label>Debt type</label>
+
+          <select
+            value={debtType}
+            onChange={event =>
+              setDebtType(event.target.value as DebtType)
+            }
+          >
+            <option value="borrowed">I borrowed money</option>
+            <option value="lent">I lent money</option>
+          </select>
+        </div>
+
+        <div className="form-group">
+          <label>Person name</label>
+
+          <input
+            type="text"
+            required
+            maxLength={100}
+            value={debtPersonName}
+            onChange={event =>
+              setDebtPersonName(event.target.value)
+            }
+            placeholder="Enter person's name"
+          />
+        </div>
+
+        <div className="form-group">
+          <label>Principal amount (MMK)</label>
+
+          <input
+            type="number"
+            min="1"
+            step="1"
+            required
+            value={debtPrincipalAmount}
+            onChange={event =>
+              setDebtPrincipalAmount(event.target.value)
+            }
+            placeholder="e.g. 100000"
+          />
+        </div>
+
+        <div className="form-group">
+          <label>Start date</label>
+
+          <input
+            type="date"
+            required
+            value={debtStartDate}
+            onChange={event =>
+              setDebtStartDate(event.target.value)
+            }
+          />
+        </div>
+
+        <div className="form-group">
+          <label>Due date (Optional)</label>
+
+          <input
+            type="date"
+            min={debtStartDate}
+            value={debtDueDate}
+            onChange={event =>
+              setDebtDueDate(event.target.value)
+            }
+          />
+        </div>
+
+        <div className="form-group">
+          <label>Description</label>
+
+          <input
+            type="text"
+            maxLength={200}
+            value={debtDescription}
+            onChange={event =>
+              setDebtDescription(event.target.value)
+            }
+            placeholder="Optional note"
+          />
+        </div>
+
+        {debtError && (
+          <p className="error-message" role="alert">
+            {debtError}
+          </p>
+        )}
+
+        <button
+          type="submit"
+          className="primary-button full-width"
+          disabled={debtLoading}
+        >
+          {debtLoading ? "Saving..." : "Create debt"}
+        </button>
+
+      </form>
+    </article>
+
+    {/* Debt List */}
+    <div className="section-heading section-heading-spaced">
+      <div>
+        <div className="section-heading section-heading-spaced">
+  <div>
+    <h2>Debt records</h2>
+    <p>Manage your borrowed and lent money.</p>
+  </div>
+
+  <span className="count-pill">
+    {visibleDebts.length} records
+  </span>
+</div>
+
+<div className="debt-tabs">
+  <button
+    type="button"
+    className={debtTab === "active" ? "active" : ""}
+    onClick={() => setDebtTab("active")}
+  >
+    Active ({activeDebts.length})
+  </button>
+
+  <button
+    type="button"
+    className={debtTab === "completed" ? "active" : ""}
+    onClick={() => setDebtTab("completed")}
+  >
+    Completed ({completedDebts.length})
+  </button>
+
+  <button
+    type="button"
+    className={debtTab === "archived" ? "active" : ""}
+    onClick={() => setDebtTab("archived")}
+  >
+    Archived ({archivedDebts.length})
+  </button>
+</div>
+        <p>Manage your borrowed and lent money.</p>
+      </div>
+
+      <span className="count-pill">
+        {debts.length} records
+      </span>
+    </div>
+
+    {debtLoading && (
+      <p>Loading debt information...</p>
+    )}
+
+    {!debtLoading && visibleDebts.length === 0 && (
+      <article className="surface-card empty-state">
+        <strong>No debt records yet</strong>
+        <p>Create your first debt record to get started.</p>
+      </article>
+    )}
+
+    <section className="budget-grid">
+
+      {visibleDebts.map(debt => (
+
+
+        <article className="surface-card budget-card" key={debt.id}>
+
+          <div className="budget-card-head">
+            <div>
+              <span className="eyebrow">
+                {debt.type === "borrowed" ? "BORROWED" : "LENT"}
+              </span>
+
+              <h3>{debt.personName}</h3>
+            </div>
+
+            <span className={
+              debt.status === "paid"
+                ? "status-tag good"
+                : debt.status === "partial"
+                  ? "status-tag warning"
+                  : "status-tag neutral"
+            }>
+              {debt.status.toUpperCase()}
+            </span>
+          </div>
+
+          <div className="budget-numbers">
+            <strong>{formatMoney(debt.remainingAmount)}</strong>
+            <span>Remaining</span>
+          </div>
+
+          <p>
+            Principal: {formatMoney(debt.principalAmount)}
+          </p>
+
+          <p>
+            Paid: {formatMoney(debt.paidAmount)}
+          </p>
+
+          <p>
+            Start date: {debt.startDate}
+          </p>
+
+          {debt.dueDate && (
+            <p>Due date: {debt.dueDate}</p>
+          )}
+
+          {debt.description && (
+            <p>{debt.description}</p>
+          )}
+
+          {/* Payment form */}
+          {debt.status !== "paid" && (
+
+            <form
+              onSubmit={event =>
+                handleAddDebtPayment(event, debt.id)
+              }
+            >
+
+              <div className="form-group">
+                <label>Payment amount (MMK)</label>
+
+                <input
+                  name="paymentAmount"
+                  type="number"
+                  min="1"
+                  max={debt.remainingAmount}
+                  step="1"
+                  required
+                  placeholder="Enter amount"
+                />
+              </div>
+
+              <div className="form-group">
+                <label>Payment date</label>
+
+                <input
+                  name="paymentDate"
+                  type="date"
+                  defaultValue={getToday()}
+                  required
+                />
+              </div>
+
+              <div className="form-group">
+                <label>Note</label>
+
+                <input
+                  name="paymentNote"
+                  type="text"
+                  maxLength={200}
+                  placeholder="Optional payment note"
+                />
+              </div>
+              {paymentError && (
+  <p className="error-message" role="alert">
+    {paymentError}
+  </p>
+)}
+
+              <button
+                type="submit"
+                className="primary-button compact"
+                disabled={debtLoading}
+              >
+                Record payment
+              </button>
+
+            </form>
+
+          )}
+          {debt.status === "paid" && !debt.archivedAt && (
+  <button
+    type="button"
+    className="danger-link"
+    disabled={debtLoading}
+    onClick={() => updateDebtArchive(debt.id, "archive")}
+  >
+    Archive Debt
+  </button>
+)}
+
+{debt.archivedAt && (
+  <button
+    type="button"
+    className="primary-button compact"
+    disabled={debtLoading}
+    onClick={() => updateDebtArchive(debt.id, "restore")}
+  >
+    Restore Debt
+  </button>
+)}
+
+          {/* Payment history */}
+          <div className="section-heading section-heading-spaced">
+            <h3>Payment history</h3>
+          </div>
+
+          {debt.payments.length === 0 ? (
+            <p>No payments recorded.</p>
+          ) : (
+            <div className="compact-list">
+              {debt.payments.map(payment => (
+                <div className="compact-row" key={payment.id}>
+                  <div className="compact-info">
+                    <strong>
+                      {formatMoney(payment.amount)}
+                    </strong>
+                    <small>{payment.paymentDate}</small>
+                    {payment.note && (
+                      <small>{payment.note}</small>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+        </article>
+
+      ))}
+
+    </section>
+
+  </section>
+)}
 
           {activePage === "analytics" && (
             <>

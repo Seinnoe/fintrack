@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap');
+@import url("https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap");
 
 /* =========================================================
    FINTRACK â€” LUXURY FINANCE
@@ -1068,3 +1068,198 @@ button:disabled { opacity: .55; cursor: not-allowed; }
 .fintrack-toast span { width: 20px; height: 20px; display: grid; place-items: center; border-radius: 50%; color: #1d2119; background: #6bc99b; font-weight: 800; }
 @keyframes toastIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 @media (max-width: 560px) { .floating-panel { top: 58px; right: 10px; } .settings-modal { padding-right: 15px; padding-left: 15px; } .settings-actions { flex-wrap: wrap; } .fintrack-toast { right: 12px; bottom: 75px; } }
+/* Monthly Financial Summary */
+
+.monthly-summary-card {
+  padding: 26px;
+  margin-bottom: 24px;
+}
+
+.monthly-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+  margin: 24px 0;
+}
+
+.monthly-summary-item {
+  padding: 18px;
+  border: 1px solid var(--border-color, #e5e7eb);
+  border-radius: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.monthly-summary-item > span {
+  font-size: 12px;
+  color: var(--muted, #888);
+}
+
+.monthly-summary-item strong {
+  font-size: 19px;
+  overflow-wrap: anywhere;
+}
+
+.monthly-summary-item small {
+  font-size: 12px;
+  color: var(--muted, #888);
+}
+
+.monthly-comparison {
+  padding: 20px;
+  border-radius: 14px;
+  background: var(--card-muted, #f7f7f7);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 25px;
+}
+
+.monthly-comparison p {
+  margin: 8px 0 0;
+  font-size: 14px;
+}
+
+.monthly-comparison p strong {
+  margin-left: 8px;
+}
+
+.comparison-badge {
+  font-size: 13px;
+  font-weight: 600;
+  padding: 8px 13px;
+  border-radius: 20px;
+  background: #e5e7eb;
+  color: #374151;
+  white-space: nowrap;
+}
+
+.comparison-badge.good {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.comparison-badge.danger {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.category-breakdown {
+  margin-top: 20px;
+}
+
+.category-breakdown h3 {
+  font-size: 16px;
+  margin-bottom: 20px;
+}
+
+.category-breakdown-item {
+  margin-bottom: 18px;
+}
+
+.category-breakdown-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 9px;
+  font-size: 13px;
+}
+
+.category-breakdown-head span {
+  color: var(--muted, #888);
+}
+
+.category-breakdown-item .progress-track {
+  height: 8px;
+  overflow: hidden;
+  border-radius: 20px;
+}
+
+.category-breakdown-item .progress-fill {
+  height: 100%;
+  border-radius: 20px;
+}
+
+@media (max-width: 768px) {
+  .monthly-summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 420px) {
+  .monthly-summary-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .monthly-summary-card {
+    padding: 16px;
+  }
+}
+.monthly-comparison {
+  padding: 20px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 25px;
+}
+
+.monthly-comparison p {
+  margin: 8px 0 0;
+  font-size: 14px;
+  color: #aaa99f;
+}
+
+.monthly-comparison p strong {
+  margin-left: 8px;
+  color: #f1e7bd;
+}
+.debt-tabs {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 20px 0;
+}
+
+.debt-tabs button {
+  padding: 11px 20px;
+  border: 1px solid var(--line-strong);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--muted);
+  font-weight: 600;
+  transition: .2s ease;
+}
+
+.debt-tabs button.active {
+  background: var(--gold);
+  color: #171717;
+  border-color: var(--gold);
+}
+
+.danger-link {
+  margin-top: 16px;
+  padding: 10px 18px;
+  border: 1px solid rgba(240, 120, 143, .4);
+  border-radius: 9px;
+  background: rgba(240, 120, 143, .1);
+  color: #F0788F;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.danger-link:hover {
+  background: rgba(240, 120, 143, .2);
+}
+
+.debt-tabs button:disabled,
+.danger-link:disabled {
+  opacity: .5;
+  cursor: not-allowed;
+}

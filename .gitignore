@@ -11,3 +11,33 @@ frontend/src/App.backup.css
 
 # Local backup files
 /backup/
+# Environment secrets
+.env
+.env.*
+!.env.example
+
+# Backup files
+*.before-*
+*.backup.*
+
+# Dependencies and builds
+node_modules/
+dist/
+coverage/
+
+# Logs
+*.log
+
+# OS files
+.DS_Store
+# AI coding tool files
+.agents/
+.claude/
+.windsurf/
+
+# Backup configuration files
+*.backup
+*.backup.*
+*.error-backup
+backend/skills-lock.json
+/src/
