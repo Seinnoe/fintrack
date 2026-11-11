@@ -1,0 +1,17 @@
+
+node_modules
+dist
+generated
+.env
+.env.*
+!.env.example
+
+*.backup
+*.before-*
+skills-lock.json
+.agents
+.claude
+.windsurf
+
+npm-debug.log
+coverage

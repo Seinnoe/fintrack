@@ -12,9 +12,7 @@ import type {
   DebtOverview,
   DebtType,
 } from "./types";
-const API_URL =
-  import.meta.env.VITE_API_URL || "http://127.0.0.1:3000";
-
+const API_URL = import.meta.env.VITE_API_URL || "";
 
 const BUDGET_STORAGE_KEY = "fintrack_budgets_v1";
 const SAVINGS_STORAGE_KEY = "fintrack_savings_v1";

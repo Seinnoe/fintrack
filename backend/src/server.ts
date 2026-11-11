@@ -11,9 +11,9 @@ async function startServer() {
 
     console.log("Database connected successfully");
 
-    const server = app.listen(PORT, "127.0.0.1", () => {
-      console.log(`FinTrack API running at http://127.0.0.1:${PORT}`);
-    });
+    const server = app.listen(PORT, "0.0.0.0", () => {
+  console.log(`FinTrack API running on port ${PORT}`);
+});
 
     const shutdown = async (signal: string) => {
       console.log(`${signal} received. Shutting down...`);

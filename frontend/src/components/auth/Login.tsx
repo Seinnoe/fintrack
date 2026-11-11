@@ -6,9 +6,7 @@ type LoginProps = {
   onLogin: () => void;
 };
 
-const API_URL =
-  import.meta.env.VITE_API_URL || "http://127.0.0.1:3000";
-
+const API_URL = import.meta.env.VITE_API_URL || "";
 export default function Login({ onLogin }: LoginProps) {
   const [isRegister, setIsRegister] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
