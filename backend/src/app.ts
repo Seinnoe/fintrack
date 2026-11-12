@@ -15,10 +15,16 @@ import debtRoutes from "./routes/debt.routes.js";
 const app = express();
 
 app.use(helmet());
-app.use("/api/reports", reportRoutes);
+
+const allowedOrigins = [
+  process.env.FRONTEND_URL,
+  "http://localhost:5173",
+].filter((url): url is string => Boolean(url));
+
 app.use(
   cors({
-    origin: process.env.FRONTEND_URL || "http://localhost:5173",
+    origin: allowedOrigins,
+    credentials: true,
   })
 );
 
