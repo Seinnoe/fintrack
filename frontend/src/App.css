@@ -1263,196 +1263,180 @@ button:disabled { opacity: .55; cursor: not-allowed; }
   opacity: .5;
   cursor: not-allowed;
 }
-
-
-/* =========================================================
-   MOBILE RESPONSIVE POLISH — preserve the existing desktop theme
-   ========================================================= */
-html, body, #root { width: 100%; overflow-x: clip; }
-body { -webkit-text-size-adjust: 100%; }
-.app-shell, .main-content, .page-content,
-.fin-dashboard, .dashboard-main-column, .dashboard-side-column,
-.surface-card, .metric-card, .budget-card, .goal-card,
-.form-card, .analytics-chart-card, .category-card {
-  min-width: 0;
-}
-img, svg, canvas { max-width: 100%; }
-button, input, select, textarea { max-width: 100%; }
-.page-content { width: 100%; }
-.page-heading > *, .section-heading > *, .topbar > * { min-width: 0; }
-.balance-number, .monthly-summary-item strong,
-.metric-card > strong, .budget-numbers strong,
-.goal-amount strong { overflow-wrap: anywhere; }
-.history-row, .compact-row, .notification-item { min-width: 0; }
-.history-info, .compact-info { min-width: 0; }
-
-@media (max-width: 900px) {
-  .page-content { padding-left: 22px; padding-right: 22px; }
-  .two-column-layout { grid-template-columns: minmax(0, 1fr); }
-  .inline-form { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .inline-form .primary-button { width: 100%; }
-  .dashboard-lower { grid-template-columns: minmax(0, 1fr); }
-  .analytics-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-}
-
-@media (max-width: 600px) {
-  html, body, #root { min-width: 320px; }
-  .app-shell { min-height: 100dvh; }
-  .sidebar {
-    position: fixed;
-    inset: auto 0 0;
+/* Mobile/iPhone layout fixes: keep the header inside the safe area and
+   prevent the search/actions row and native date control from overflowing. */
+@media (max-width: 560px) {
+  html,
+  body,
+  #root {
     width: 100%;
-    height: calc(62px + env(safe-area-inset-bottom));
-    min-height: 62px;
-    padding: 6px 5px calc(6px + env(safe-area-inset-bottom));
-    display: flex;
-    flex-direction: row;
-    align-items: center;
-    justify-content: center;
-    border-top: 1px solid var(--line);
-    border-right: 0;
-    z-index: 50;
-    background: rgba(13, 23, 39, .97);
-    backdrop-filter: blur(16px);
+    max-width: 100%;
+    overflow-x: clip;
   }
-  .sidebar .brand, .sidebar .sidebar-spacer,
-  .sidebar .sidebar-bottom-icon, .sidebar .sidebar-meta { display: none !important; }
-  .sidebar-nav {
-    width: 100%;
-    display: flex;
-    flex-direction: row;
-    align-items: center;
-    justify-content: space-around;
-    gap: 2px;
+
+  body {
+    overscroll-behavior-x: none;
   }
-  .sidebar-nav .nav-item {
-    width: clamp(38px, 13vw, 48px);
-    min-width: 0;
-    height: 44px;
-    min-height: 44px;
-    flex: 0 1 48px;
-    justify-content: center;
-    padding: 6px 2px;
-    border-radius: 10px;
-    transform: none !important;
-  }
-  .sidebar-nav .nav-item.active {
-    box-shadow: inset 0 -2px var(--gold), 0 5px 15px rgba(0,0,0,.12);
-  }
-  .sidebar-nav .nav-icon { width: auto; font-size: 20px; }
+
   .main-content {
     width: 100%;
     min-width: 0;
     margin-left: 0;
-    padding-bottom: calc(72px + env(safe-area-inset-bottom));
+    padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px));
   }
+
+  /* iOS status-bar safe area; sticky keeps the controls aligned while scrolling. */
   .topbar {
     position: sticky;
     top: 0;
-    z-index: 30;
-    height: 58px;
-    padding: 0 12px;
+    z-index: 40;
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    justify-content: space-between;
     gap: 8px;
+    width: 100%;
+    height: auto;
+    min-height: calc(63px + env(safe-area-inset-top, 0px));
+    padding: calc(8px + env(safe-area-inset-top, 0px)) 12px 8px;
+    box-sizing: border-box;
   }
+
   .topbar-search {
+    flex: 1 1 0;
     width: auto;
     min-width: 0;
-    flex: 1 1 auto;
-    height: 36px;
+    max-width: none;
+    height: 38px;
+    gap: 7px;
+    padding: 0 9px;
   }
-  .topbar-search input { min-width: 0; width: 100%; font-size: 12px; }
-  .topbar-right { flex: 0 0 auto; gap: 5px; }
-  .topbar-action { width: 32px; min-width: 32px; height: 32px; }
-  .profile-trigger { gap: 0; }
-  .profile-avatar { width: 32px; height: 32px; flex: 0 0 32px; }
-  .profile-copy, .profile-chevron { display: none !important; }
-  .page-content { padding: 16px 12px 22px; }
-  .page-heading {
-    align-items: flex-start;
-    flex-direction: column;
-    gap: 10px;
-    margin-bottom: 18px;
+
+  .topbar-search input {
+    flex: 1 1 0;
+    width: 0;
+    min-width: 0;
+    font-size: 12px;
   }
-  .page-heading h1 { font-size: clamp(23px, 7vw, 29px); }
-  .page-heading p { font-size: 12px; line-height: 1.55; }
-  .date-chip { padding: 7px 10px; font-size: 10px; }
-  .fin-dashboard { display: grid; grid-template-columns: minmax(0, 1fr); gap: 13px; }
-  .dashboard-main-column, .dashboard-side-column { min-width: 0; }
-  .dashboard-side-column { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
-  .balance-chart-card { padding: 16px 13px 13px; }
-  .balance-chart-head { align-items: flex-start; gap: 12px; }
-  .balance-chart-head h1 { font-size: 22px; }
-  .balance-number { font-size: clamp(23px, 7vw, 31px); line-height: 1.2; }
-  .balance-note { font-size: 10px; line-height: 1.4; }
-  .period-switch { max-width: 100%; overflow-x: auto; }
-  .period-switch button, .period-switch span, .period-switch strong {
-    flex: 1 0 auto;
-    font-size: 9px;
+
+  .topbar-search input::placeholder {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
-  .balance-chart { height: 145px; gap: 6px; }
-  .chart-axis { width: 29px; flex-basis: 29px; font-size: 8px; }
-  .chart-bars { gap: 3px; }
-  .chart-month small { font-size: 8px; }
-  .dashboard-metrics-row, .metric-grid, .analytics-metrics {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 9px;
+
+  .topbar-right {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
   }
-  .dashboard-metrics-row .metric-card, .metric-card { padding: 12px 11px; }
-  .dashboard-metrics-row .metric-label, .metric-label { font-size: 8px; letter-spacing: .6px; }
-  .dashboard-metrics-row .metric-card > strong, .metric-card > strong { font-size: 14px; }
-  .dashboard-lower { grid-template-columns: minmax(0, 1fr); gap: 12px; }
-  .surface-card { padding: 15px 13px; border-radius: 13px; }
-  .section-heading { gap: 8px; margin-bottom: 13px; }
-  .section-heading h2 { font-size: 14px; }
-  .section-heading p { font-size: 10px; }
-  .investment-card { padding: 15px 12px; }
-  .investment-bars { gap: 4px; padding-left: 2px; padding-right: 2px; }
-  .investment-month small { font-size: 8px; }
-  .two-column-layout { grid-template-columns: minmax(0, 1fr); gap: 12px; }
-  .inline-form { grid-template-columns: minmax(0, 1fr); gap: 10px; }
-  .inline-form .primary-button { width: 100%; }
-  .form-card { padding: 15px 13px; }
-  .form-group input, .form-group select { min-height: 44px; font-size: 16px; }
-  .form-group textarea { font-size: 16px; }
-  .budget-grid, .savings-grid { grid-template-columns: minmax(0, 1fr); gap: 11px; }
-  .monthly-summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }
-  .monthly-summary-card { padding: 14px; }
-  .monthly-summary-item { padding: 12px; gap: 7px; }
-  .monthly-summary-item > span, .monthly-summary-item small { font-size: 10px; }
-  .monthly-summary-item strong { font-size: 15px; }
-  .monthly-comparison, .savings-summary {
-    align-items: flex-start;
-    flex-direction: column;
-    gap: 12px;
-    padding: 15px;
+
+  .topbar-action {
+    flex: 0 0 32px;
+    width: 32px;
+    min-width: 32px;
+    height: 32px;
+    transform: none;
   }
-  .savings-summary h2 { font-size: 22px; }
-  .savings-total-progress { width: 100%; }
-  .savings-total-progress strong { text-align: left; }
-  .debt-tabs { gap: 7px; }
-  .debt-tabs button { flex: 1 1 auto; padding: 9px 11px; font-size: 11px; }
-  .history-row { gap: 8px; padding: 11px 0; }
-  .history-info strong { max-width: 100%; font-size: 11px; }
-  .history-info small { font-size: 9px; }
-  .history-amount { flex: 0 0 auto; font-size: 10px; }
-  .card-actions { flex-wrap: wrap; gap: 7px; }
-  .card-actions button, .primary-button, .secondary-button { min-height: 40px; }
-  .floating-panel { top: 62px; right: 8px; width: min(370px, calc(100vw - 16px)); }
-  .modal-backdrop { align-items: flex-end; padding: 10px; }
-  .settings-modal { width: 100%; max-height: calc(100dvh - 20px); overflow-y: auto; border-radius: 17px 17px 12px 12px; }
-  .settings-option { align-items: flex-start; }
-  .settings-actions > * { flex: 1 1 130px; justify-content: center; }
-  .fintrack-toast { right: 10px; bottom: calc(72px + env(safe-area-inset-bottom)); }
+
+  .topbar-action:hover {
+    transform: none;
+  }
+
+  .profile-trigger {
+    flex: 0 0 auto;
+    min-width: 0;
+  }
+
+  .profile-avatar {
+    flex: 0 0 32px;
+    width: 32px;
+    height: 32px;
+  }
+
+  .notification-count {
+    top: -3px;
+    right: -3px;
+    z-index: 2;
+  }
+
+  .page-content {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    padding-right: 12px;
+    padding-left: 12px;
+  }
+
+  .page-content > *,
+  .form-card,
+  .surface-card,
+  .two-column-layout,
+  .form-group {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  .form-group input,
+  .form-group select,
+  .form-group input[type="date"] {
+    display: block;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+
+  .form-group input[type="date"] {
+    -webkit-appearance: none;
+    appearance: none;
+    min-height: 48px;
+    padding-inline: 12px;
+    text-align: left;
+  }
+
+  /* Reserve space for the fixed bottom navigation, including iPhone home indicator. */
+  .sidebar {
+    bottom: 0;
+    height: calc(62px + env(safe-area-inset-bottom, 0px));
+    padding: 7px 10px calc(7px + env(safe-area-inset-bottom, 0px));
+    box-sizing: border-box;
+  }
+
+  .sidebar-nav {
+    width: 100%;
+    min-width: 0;
+    justify-content: space-around;
+  }
+
+  .nav-item {
+    flex: 0 1 46px;
+    min-width: 0;
+  }
 }
 
 @media (max-width: 380px) {
-  .topbar { padding-left: 9px; padding-right: 9px; }
-  .topbar-search { max-width: 52%; }
-  .topbar-search input { font-size: 11px; }
-  .topbar-right { gap: 3px; }
-  .topbar-action { width: 29px; min-width: 29px; height: 29px; }
-  .page-content { padding-left: 10px; padding-right: 10px; }
-  .dashboard-metrics-row, .metric-grid, .analytics-metrics { gap: 7px; }
-  .monthly-summary-grid { grid-template-columns: minmax(0, 1fr); }
-  .period-switch button, .period-switch span, .period-switch strong { padding: 5px 4px; }
+  .topbar {
+    gap: 6px;
+    padding-right: 9px;
+    padding-left: 9px;
+  }
+
+  .topbar-right {
+    gap: 4px;
+  }
+
+  .topbar-action,
+  .profile-avatar {
+    flex-basis: 29px;
+    width: 29px;
+    min-width: 29px;
+    height: 29px;
+  }
+
+  .topbar-search {
+    padding-inline: 7px;
+  }
 }
