@@ -1276,6 +1276,9 @@ button:disabled { opacity: .55; cursor: not-allowed; }
 
   body {
     overscroll-behavior-x: none;
+    /* Keep the app content below the iPhone status-bar safe area. */
+    padding-top: env(safe-area-inset-top, 0px);
+    box-sizing: border-box;
   }
 
   .main-content {
@@ -1297,8 +1300,8 @@ button:disabled { opacity: .55; cursor: not-allowed; }
     gap: 8px;
     width: 100%;
     height: auto;
-    min-height: calc(63px + env(safe-area-inset-top, 0px));
-    padding: calc(8px + env(safe-area-inset-top, 0px)) 12px 8px;
+    min-height: 63px;
+    padding: 8px 12px;
     box-sizing: border-box;
   }
 
@@ -1418,6 +1421,290 @@ button:disabled { opacity: .55; cursor: not-allowed; }
 }
 
 @media (max-width: 380px) {
+  .topbar {
+    gap: 6px;
+    padding-right: 9px;
+    padding-left: 9px;
+  }
+
+  .topbar-right {
+    gap: 4px;
+  }
+
+  .topbar-action,
+  .profile-avatar {
+    flex-basis: 29px;
+    width: 29px;
+    min-width: 29px;
+    height: 29px;
+  }
+
+  .topbar-search {
+    padding-inline: 7px;
+  }
+}
+/* =========================================
+   FINTRACK - iPHONE PWA RESPONSIVE FIX
+========================================= */
+
+@media (max-width: 560px) {
+
+  html,
+  body,
+  #root {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    overflow-x: clip;
+  }
+
+  html {
+    min-height: 100%;
+    scroll-padding-top: env(safe-area-inset-top, 0px);
+  }
+
+  body {
+    min-height: 100vh;
+    min-height: 100dvh;
+    padding-top: 0 !important;
+    overscroll-behavior-x: none;
+  }
+
+  .app-shell {
+    min-height: 100vh;
+    min-height: 100dvh;
+  }
+
+  .main-content {
+    width: 100%;
+    min-width: 0;
+    margin-left: 0;
+    padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px));
+  }
+
+  /* HEADER */
+
+  .topbar {
+    position: -webkit-sticky;
+    position: sticky;
+    top: 0;
+    z-index: 50;
+
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    justify-content: space-between;
+
+    width: 100%;
+    height: auto;
+    min-height: calc(63px + env(safe-area-inset-top, 0px));
+
+    gap: 8px;
+
+    padding:
+      calc(8px + env(safe-area-inset-top, 0px))
+      12px
+      8px;
+
+    box-sizing: border-box;
+
+    background: rgba(24, 25, 21, .97);
+
+    -webkit-backdrop-filter: blur(18px);
+    backdrop-filter: blur(18px);
+  }
+
+  /* SEARCH */
+
+  .topbar-search {
+    flex: 1 1 0;
+    width: auto;
+    min-width: 0;
+    max-width: none;
+
+    height: 38px;
+
+    display: flex;
+    align-items: center;
+    gap: 7px;
+
+    padding: 0 9px;
+  }
+
+  .topbar-search input {
+    flex: 1 1 0;
+    width: 0;
+    min-width: 0;
+    font-size: 12px;
+  }
+
+  .topbar-search input::placeholder {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* HEADER ICONS */
+
+  .topbar-right {
+    flex: 0 0 auto;
+
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+
+    gap: 6px;
+    min-width: 0;
+  }
+
+  .topbar-action {
+    position: relative;
+
+    flex: 0 0 32px;
+    width: 32px;
+    min-width: 32px;
+    height: 32px;
+
+    display: grid;
+    place-items: center;
+
+    padding: 0;
+    transform: none;
+  }
+
+  .topbar-action:hover {
+    transform: none;
+  }
+
+  .profile-trigger {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 0;
+  }
+
+  .profile-copy,
+  .profile-chevron {
+    display: none !important;
+  }
+
+  .profile-avatar {
+    flex: 0 0 32px;
+    width: 32px;
+    height: 32px;
+  }
+
+  .notification-count {
+    top: -3px;
+    right: -3px;
+    z-index: 2;
+  }
+
+  /* NOTIFICATION & PROFILE PANELS */
+
+  .floating-panel {
+    position: fixed;
+
+    top: calc(63px + env(safe-area-inset-top, 0px));
+    right: 10px;
+
+    max-height: calc(
+      100dvh - 90px - env(safe-area-inset-top, 0px)
+    );
+
+    overflow: auto;
+  }
+
+  /* PAGE CONTENT */
+
+  .page-content {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+
+    padding: 18px 12px 20px;
+  }
+
+  .page-content > *,
+  .form-card,
+  .surface-card,
+  .two-column-layout,
+  .form-group {
+    min-width: 0;
+    max-width: 100%;
+  }
+
+  /* FORM INPUTS */
+
+  .form-group input,
+  .form-group select,
+  .form-group input[type="date"] {
+    display: block;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+
+  .form-group input[type="date"] {
+    -webkit-appearance: none;
+    appearance: none;
+
+    min-height: 48px;
+    padding-inline: 12px;
+    text-align: left;
+  }
+
+  /* BOTTOM NAVIGATION */
+
+  .sidebar {
+    position: fixed;
+    inset: auto 0 0;
+
+    z-index: 60;
+
+    width: 100%;
+
+    height: calc(62px + env(safe-area-inset-bottom, 0px));
+    min-height: calc(62px + env(safe-area-inset-bottom, 0px));
+
+    padding:
+      7px
+      10px
+      calc(7px + env(safe-area-inset-bottom, 0px));
+
+    box-sizing: border-box;
+  }
+
+  .sidebar-nav {
+    width: 100%;
+    min-width: 0;
+
+    display: flex;
+    align-items: center;
+    justify-content: space-around;
+
+    gap: 5px;
+  }
+
+  .nav-item {
+    flex: 0 1 46px;
+    min-width: 0;
+  }
+
+  /* TOAST */
+
+  .fintrack-toast {
+    right: 12px;
+    bottom: calc(75px + env(safe-area-inset-bottom, 0px));
+  }
+}
+
+/* SMALL IPHONE SCREENS */
+
+@media (max-width: 380px) {
+
   .topbar {
     gap: 6px;
     padding-right: 9px;
