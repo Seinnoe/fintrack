@@ -1,4 +1,4 @@
-
+import { sendPushNotification } from "../services/push.service.js";
 import type { Response } from "express";
 import { z } from "zod";
 import { prisma } from "../config/prisma.js";
@@ -100,6 +100,14 @@ export async function createDebt(req: AuthRequest, res: Response) {
         dueDate,
       },
     });
+    void sendPushNotification(req.userId, {
+  title: "Debt record created",
+  message: `${debt.personName}: ${Number(debt.principalAmount).toLocaleString()} MMK`,
+  level: "info",
+  url: "/",
+}).catch(error => {
+  console.error("Debt push failed:", error);
+});
     console.log("AFTER PRISMA:", {
   saved: debt.principalAmount.toString(),
 });
@@ -147,6 +155,14 @@ export async function addDebtPayment(req: AuthRequest, res: Response) {
       paymentDate,
       result.data.note
     );
+    void sendPushNotification(req.userId, {
+  title: "Debt payment recorded",
+  message: `${result.data.amount.toLocaleString()} MMK payment recorded successfully.`,
+  level: "success",
+  url: "/",
+}).catch(error => {
+  console.error("Debt payment push failed:", error);
+});
 
     return res.status(201).json({
       success: true,

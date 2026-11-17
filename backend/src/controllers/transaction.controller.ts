@@ -1,4 +1,4 @@
-
+import { sendPushNotification } from "../services/push.service.js";
 import type { Response } from "express";
 import { z } from "zod";
 
@@ -176,6 +176,17 @@ export async function createTransaction(
         transaction.date
       );
     }
+    // Send push notification for new transaction
+void sendPushNotification(req.userId, {
+  title: transaction.type === "income"
+    ? "Income recorded"
+    : "Expense recorded",
+  message: `${transaction.category}: ${Number(transaction.amount).toLocaleString()} MMK`,
+  level: "success",
+  url: "/",
+}).catch(error => {
+  console.error("Transaction push notification failed:", error);
+});
 
     return res.status(201).json({
       success: true,
@@ -290,6 +301,14 @@ export async function updateTransaction(
       },
       data: updateData,
     });
+    void sendPushNotification(req.userId, {
+  title: "Transaction updated",
+  message: `${transaction.category}: ${Number(transaction.amount).toLocaleString()} MMK`,
+  level: "info",
+  url: "/",
+}).catch(error => {
+  console.error("Transaction update push failed:", error);
+});
     // Refresh alerts for the previous expense category/month.
 if (existing.type === "expense") {
   await refreshBudgetAlerts(

@@ -2,6 +2,7 @@ import type { Response } from "express";
 import { z } from "zod";
 import { prisma } from "../config/prisma.js";
 import type { AuthRequest } from "../middleware/auth.middleware.js";
+import { sendPushNotification } from "../services/push.service.js";
 
 const savingsSchema = z.object({
   name: z.string().trim().min(1).max(100),
@@ -69,6 +70,14 @@ export async function createSavingsGoal(req: AuthRequest, res: Response) {
         ...result.data,
       },
     });
+    void sendPushNotification(req.userId, {
+  title: "Savings goal created",
+  message: `${goal.name} savings goal has been created.`,
+  level: "success",
+  url: "/",
+}).catch(error => {
+  console.error("Savings push failed:", error);
+});
 
     return res.status(201).json({
       success: true,
@@ -221,6 +230,21 @@ export async function updateSavingsGoal(req: AuthRequest, res: Response) {
         message: "Savings goal not found",
       });
     }
+    const saved = Number(goal.savedAmount);
+const target = Number(goal.targetAmount);
+
+void sendPushNotification(req.userId, {
+  title: saved >= target
+    ? "Savings goal completed!"
+    : "Savings progress updated",
+  message: saved >= target
+    ? `Congratulations! You completed ${goal.name}.`
+    : `${goal.name}: ${saved.toLocaleString()} / ${target.toLocaleString()} MMK`,
+  level: "success",
+  url: "/",
+}).catch(error => {
+  console.error("Savings update push failed:", error);
+});
 
     return res.status(200).json({
       success: true,
