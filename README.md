@@ -1,4 +1,5 @@
-FinTrack – Personal Finance Tracker
+FinTrack — Personal Finance Management System
+
 Overview
 FinTrack is a full-stack personal finance management application
 designed to help users organize and monitor their financial activities
