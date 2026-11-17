@@ -1,3 +1,4 @@
+import pushRoutes from "./routes/push.routes.js";
 import notificationRoutes from "./routes/notification.routes.js";
 import savingsRoutes from "./routes/savings.routes.js";
 import transactionRoutes from "./routes/transaction.routes.js";
@@ -10,6 +11,7 @@ import reportRoutes from "./routes/report.routes.js";
 
 import { prisma } from "./config/prisma.js";
 import debtRoutes from "./routes/debt.routes.js";
+
 
 
 const app = express();
@@ -70,5 +72,6 @@ app.use("/api/transactions", transactionRoutes);
 app.use("/api/budgets", budgetRoutes);
 app.use("/api/savings", savingsRoutes);
 app.use("/api/notifications", notificationRoutes);
+app.use("/api/push", pushRoutes);
 app.use("/api/debts", debtRoutes);
 export default app;

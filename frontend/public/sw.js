@@ -53,3 +53,72 @@ self.addEventListener("fetch", (event) => {
     })());
   }
 });
+
+
+// Receive Web Push messages while the FinTrack PWA is in the background.
+self.addEventListener("push", (event) => {
+  event.waitUntil((async () => {
+    let data = {};
+
+    try {
+      data = event.data ? event.data.json() : {};
+    } catch {
+      data = {
+        title: "FinTrack",
+        body: event.data ? event.data.text() : "You have a new notification."
+      };
+    }
+
+    const title = data.title || "FinTrack";
+    const options = {
+      body: data.body || "You have a new financial update.",
+      icon: "/icons/icon-192.png",
+      badge: "/icons/icon-192.png",
+      tag: "fintrack-" + Date.now(),
+      data: {
+        url: data.url || "/"
+      }
+    };
+
+    await self.registration.showNotification(title, options);
+
+    if (self.registration.setAppBadge) {
+      await self.registration.setAppBadge(1).catch(() => {});
+    }
+  })());
+});
+
+// Open FinTrack when a notification is tapped.
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+
+  event.waitUntil((async () => {
+    const targetUrl = new URL(
+      event.notification.data?.url || "/",
+      self.location.origin
+    );
+
+    if (targetUrl.origin !== self.location.origin) return;
+
+    if (self.registration.clearAppBadge) {
+      await self.registration.clearAppBadge().catch(() => {});
+    }
+
+    const windows = await self.clients.matchAll({
+      type: "window",
+      includeUncontrolled: true
+    });
+
+    for (const client of windows) {
+      if (client.url.startsWith(self.location.origin)) {
+        await client.focus();
+        if ("navigate" in client) {
+          await client.navigate(targetUrl.href);
+        }
+        return;
+      }
+    }
+
+    await self.clients.openWindow(targetUrl.href);
+  })());
+});

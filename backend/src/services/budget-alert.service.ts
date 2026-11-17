@@ -1,4 +1,5 @@
 import { prisma } from "../config/prisma.js";
+import { sendPushNotification } from "./push.service.js";
 
 const ALERT_THRESHOLDS = [50, 80, 100, 101] as const;
 
@@ -129,6 +130,12 @@ export async function checkBudgetAlerts(
               : "warning",
         },
       });
+      await sendPushNotification(userId, {
+  title,
+  message,
+  level: threshold === 50 ? "info" : "warning",
+  url: "/",
+});
 
       console.log(
         `Budget alert created: ${category} (${threshold}%)`,

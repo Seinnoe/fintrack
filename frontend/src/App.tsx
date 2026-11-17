@@ -202,6 +202,155 @@ const [debtDueDate, setDebtDueDate] = useState("");
   const [notifications, setNotifications] = useState<AppNotification[]>(loadNotifications);
   const [notificationOpen, setNotificationOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+
+  const [pushEnabled, setPushEnabled] = useState(false);
+  const [pushLoading, setPushLoading] = useState(false);
+
+  useEffect(() => {
+    if (!settingsOpen || !("serviceWorker" in navigator)) return;
+
+    let active = true;
+
+    navigator.serviceWorker.ready
+      .then(registration => registration.pushManager.getSubscription())
+      .then(subscription => {
+        if (active) setPushEnabled(Boolean(subscription));
+      })
+      .catch(error => console.error("Push status check failed:", error));
+
+    return () => {
+      active = false;
+    };
+  }, [settingsOpen]);
+
+  async function enablePushNotifications() {
+    if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
+      setToast("Push notifications are not supported by this browser.");
+      return;
+    }
+
+    if (!window.isSecureContext) {
+      setToast("Push notifications require a secure HTTPS connection.");
+      return;
+    }
+
+    try {
+      setPushLoading(true);
+
+      const permission = await Notification.requestPermission();
+
+      if (permission !== "granted") {
+        setToast("Please allow notifications in your browser settings.");
+        return;
+      }
+
+      const token =
+        localStorage.getItem("fintrack_token") ||
+        sessionStorage.getItem("fintrack_token");
+
+      if (!token) {
+        setToast("Please sign in again.");
+        return;
+      }
+
+      const keyResponse = await fetch(`${API_URL}/api/push/public-key`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      const keyData = await keyResponse.json();
+
+      if (!keyResponse.ok || !keyData.publicKey) {
+        throw new Error(keyData.message || "Unable to load push configuration.");
+      }
+
+      const registration = await navigator.serviceWorker.ready;
+
+      let subscription = await registration.pushManager.getSubscription();
+
+      if (!subscription) {
+        const padding = "=".repeat((4 - keyData.publicKey.length % 4) % 4);
+        const base64 = (keyData.publicKey + padding)
+          .replace(/-/g, "+")
+          .replace(/_/g, "/");
+
+        const rawKey = Uint8Array.from(
+          atob(base64),
+          character => character.charCodeAt(0)
+        );
+
+        subscription = await registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: rawKey,
+        });
+      }
+
+      const saveResponse = await fetch(`${API_URL}/api/push/subscribe`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(subscription.toJSON()),
+      });
+
+      const saveData = await saveResponse.json();
+
+      if (!saveResponse.ok) {
+        throw new Error(saveData.message || "Unable to save subscription.");
+      }
+
+      setPushEnabled(true);
+      setToast("Push notifications enabled successfully.");
+    } catch (error) {
+      console.error("Enable push error:", error);
+      setToast(
+        error instanceof Error
+          ? error.message
+          : "Unable to enable push notifications."
+      );
+    } finally {
+      setPushLoading(false);
+    }
+  }
+
+  async function disablePushNotifications() {
+    try {
+      setPushLoading(true);
+
+      const token =
+        localStorage.getItem("fintrack_token") ||
+        sessionStorage.getItem("fintrack_token");
+
+      const registration = await navigator.serviceWorker.ready;
+      const subscription = await registration.pushManager.getSubscription();
+
+      if (subscription) {
+        if (token) {
+          await fetch(`${API_URL}/api/push/unsubscribe`, {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${token}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              endpoint: subscription.endpoint,
+            }),
+          });
+        }
+
+        await subscription.unsubscribe();
+      }
+
+      setPushEnabled(false);
+      setToast("Push notifications disabled.");
+    } catch (error) {
+      console.error("Disable push error:", error);
+      setToast("Unable to disable push notifications.");
+    } finally {
+      setPushLoading(false);
+    }
+  }
+
   const [profileOpen, setProfileOpen] = useState(false);
   const [toast, setToast] = useState("");
   const [chartPeriod, setChartPeriod] = useState(6);
@@ -1944,7 +2093,26 @@ async function updateDebtArchive(
   setIsAuthenticated(false);
 }}>↪ Sign out</button></div>}
 
-        {settingsOpen && <div className="modal-backdrop" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget) setSettingsOpen(false); }}><section className="settings-modal" role="dialog" aria-modal="true" aria-labelledby="settings-title"><div className="floating-panel-head"><div><span className="eyebrow">PREFERENCES</span><h2 id="settings-title">FinTrack settings</h2><small>Manage alerts and your local data.</small></div><button type="button" className="panel-close" onClick={() => setSettingsOpen(false)}>×</button></div><div className="settings-option"><div><strong>In-app notifications</strong><p>Budget warnings, saved transactions and savings milestones appear in your FinTrack notification center.</p></div><span className="settings-enabled">Always on</span></div><div className="settings-actions"><button type="button" className="secondary-button" onClick={exportBackup}>Export backup</button><label className="secondary-button import-button">Import backup<input type="file" accept="application/json,.json" onChange={event => { importBackup(event.target.files?.[0]); event.currentTarget.value = ""; }} /></label></div><p className="settings-note">Your data is currently stored in this browser on this device. Account sync and cloud backup are not enabled yet.</p></section></div>}
+        {settingsOpen && <div className="modal-backdrop" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget) setSettingsOpen(false); }}><section className="settings-modal" role="dialog" aria-modal="true" aria-labelledby="settings-title"><div className="floating-panel-head"><div><span className="eyebrow">PREFERENCES</span><h2 id="settings-title">FinTrack settings</h2><small>Manage alerts and your local data.</small></div><button type="button" className="panel-close" onClick={() => setSettingsOpen(false)}>×</button></div><div className="settings-option"><div><strong>In-app notifications</strong><p>Budget warnings, saved transactions and savings milestones appear in your FinTrack notification center.</p></div><span className="settings-enabled">Always on</span></div>
+
+<div className="settings-option">
+  <div>
+    <strong>Push notifications</strong>
+    <p>Receive FinTrack alerts on your iPhone Lock Screen and Notification Center.</p>
+    <small>
+      {pushEnabled ? "Push notifications are enabled." : "Get alerts even when FinTrack is closed."}
+    </small>
+  </div>
+  <button
+    type="button"
+    className="secondary-button"
+    disabled={pushLoading}
+    onClick={pushEnabled ? disablePushNotifications : enablePushNotifications}
+  >
+    {pushLoading ? "Please wait..." : pushEnabled ? "Disable" : "Enable"}
+  </button>
+</div>
+<div className="settings-actions"><button type="button" className="secondary-button" onClick={exportBackup}>Export backup</button><label className="secondary-button import-button">Import backup<input type="file" accept="application/json,.json" onChange={event => { importBackup(event.target.files?.[0]); event.currentTarget.value = ""; }} /></label></div><p className="settings-note">Your data is currently stored in this browser on this device. Account sync and cloud backup are not enabled yet.</p></section></div>}
 
         {toast && <div className="fintrack-toast" role="status"><span>✓</span>{toast}</div>}
 
