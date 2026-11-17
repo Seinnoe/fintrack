@@ -1,83 +1,106 @@
-# FinTrack – Personal Finance Tracker
+FinTrack – Personal Finance Tracker
+Overview
+FinTrack is a full-stack personal finance management application
+designed to help users organize and monitor their financial activities
+in one place.
 
-A modern Personal Finance Management Application built to help users track income, expenses, budgets, savings, and debts in one place.
+Built with React, TypeScript, Node.js, Express, Prisma ORM, and
+PostgreSQL, FinTrack provides tools for tracking income and expenses,
+managing budgets, monitoring savings goals, and handling personal debts.
 
-FinTrack provides a clean dashboard, financial insights, and Progressive Web App (PWA) support with push notifications to help users stay informed about their financial activities.
+The application also supports Progressive Web App (PWA) installation and
+browser push notifications.
+Live Application
+- Frontend: https://fintrack-frontend-wdf4.onrender.com/
+- Backend: https://fintrack-backend-uce2.onrender.com/
+- Source Code: FinTrack on
+  GitHub
+Key Features
+  Feature                             Description
+  Dashboard                           View financial summaries and trends
 
-## ✨ Features
+  Transactions                        Record, edit, and manage income and
+expenses
 
-### 📊 Dashboard
-- View total balance, income, expenses, and savings.
-- Visualize monthly financial activity.
-- Monitor financial performance through charts and summaries.
+  Budget Management                   Create monthly budgets and monitor
+spending
 
-### 💸 Transaction Management
-- Add, edit, and delete income and expense transactions.
-- Organize transactions by category.
-- Track transaction history.
+  Budget Alerts                       Receive alerts at budget thresholds
+and when budgets are exceeded
 
-### 🎯 Budget Management
-- Create and manage monthly budgets.
-- Monitor spending against budget limits.
-- Receive budget alerts at 50%, 80%, and 100%.
-- Get notified when spending exceeds the budget.
+  Savings Goals                       Set savings targets and track
+progress
 
-### 💰 Savings Goals
-- Create personal savings goals.
-- Set target amounts.
-- Track savings progress.
-- Manage savings contributions.
+  Debt Management                     Track borrowed and lent money,
+payments, and remaining balances
 
-### 🤝 Debt Management
-- Track borrowed and lent money.
-- Record debt payments.
-- Monitor remaining balances.
-- Archive completed debts.
+  Analytics                           Review financial activity and
+spending patterns
 
-### 🔔 Notifications
-- In-app notification center.
-- Web Push Notifications.
-- Budget alerts and financial activity notifications.
-- Receive notifications even when the application is in the background, subject to browser and device support.
+  Notifications                       Receive in-app and browser push
+notifications
 
-### 📱 Progressive Web App (PWA)
-- Installable on supported devices.
-- Home Screen support.
-- Service Worker integration.
-- Offline app-shell caching.
-- Push notification support.
+  Authentication                      JWT-based user authentication
 
-### 📦 Data Management
-- Export financial data backups.
-- Import previously exported backups.
-
-## 🛠️ Tech Stack
-
-**Frontend**
+  Data Backup                         Export and restore financial
+records
+PWA Support                         Install the application on
+supported devices
+Technology Stack
+Frontend
 - React
 - TypeScript
 - Vite
 - CSS
 - Progressive Web App (PWA)
-
-**Backend**
+- Service Workers
+- Web Push API
+Backend
 - Node.js
 - Express.js
 - TypeScript
 - Prisma ORM
+- JWT Authentication
+- Zod Validation
 - Web Push
-
-**Database**
+Database
 - PostgreSQL
 - Neon Database
-
-**Deployment**
-- Render
+Development & Deployment
+- Git
 - GitHub
+- Render
+- Docker and Docker Compose (where configured)
+System Architecture
+                  USER
+                    |
+                    v
+           React + TypeScript
+                Frontend
+                    |
+                 REST API
+                    |
+                    v
+            Node.js + Express
+                 Backend
+                    |
+                    v
+                Prisma ORM
+                    |
+                    v
+               PostgreSQL
+                (Neon DB)
 
-## 📁 Project Structure
+          Push Notifications
+                    |
+                    v
+              Web Push API
 
-```text
+             Deployment
+                    |
+                    v
+                  Render
+Project Structure
 fintrack/
 ├── frontend/
 │   ├── public/
@@ -89,7 +112,6 @@ fintrack/
 │       ├── App.tsx
 │       ├── App.css
 │       └── main.tsx
-│
 ├── backend/
 │   ├── prisma/
 │   │   ├── migrations/
@@ -102,130 +124,112 @@ fintrack/
 │       ├── services/
 │       ├── app.ts
 │       └── server.ts
-│
 └── README.md
-```
-
-## 🚀 Getting Started
-
-### 1. Clone the Repository
-
-```bash
+Getting Started
+Prerequisites
+- Node.js
+- npm
+- PostgreSQL or a Neon Database account
+- Git
+1. Clone the Repository
 git clone https://github.com/hsumyatnoe2092/fintrack.git
-
 cd fintrack
-```
-
-### 2. Install Frontend Dependencies
-
-```bash
+2. Install Dependencies
+Backend:
+cd backend
+npm install
+Frontend: Open another terminal from the project root:
 cd frontend
 npm install
-```
+3. Configure Environment Variables
+Create the required environment files.
 
-### 3. Install Backend Dependencies
-
-```bash
-cd ../backend
-npm install
-```
-
-### 4. Configure Environment Variables
-
-Create the required environment files using the following variables.
-
-**Backend environment (`backend/.env` or the environment configuration used by your deployment):**
-
-```env
-DATABASE_URL=your_postgresql_database_url
-
-FRONTEND_URL=your_frontend_url
+Backend --- backend/.env
+DATABASE_URL=your_postgresql_connection_string
+JWT_SECRET=your_secure_random_secret
+FRONTEND_URL=http://localhost:5173
 
 VAPID_PUBLIC_KEY=your_vapid_public_key
-
 VAPID_PRIVATE_KEY=your_vapid_private_key
-
 VAPID_SUBJECT=mailto:your-email@example.com
-```
-
-**Frontend environment (`frontend/.env`):**
-
-```env
-VITE_API_URL=your_backend_api_url
-```
-
-Never commit real credentials, database passwords, or private keys to GitHub.
-
-### 5. Set Up the Database
-
-```bash
-cd backend
-
+Frontend --- frontend/.env
+VITE_API_URL=http://localhost:YOUR_BACKEND_PORT
+For the deployed application, use:
+VITE_API_URL=https://fintrack-backend-uce2.onrender.com
+Replace placeholder values with your own configuration. Never commit
+.env files, database credentials, JWT secrets, or private VAPID keys.
+4. Database Setup
+From the backend directory:
 npx prisma migrate deploy
-
 npx prisma generate
-```
-
-Make sure your PostgreSQL database is configured before running migrations.
-
-### 6. Run the Backend
-
-```bash
+Make sure your PostgreSQL database is configured before running
+migrations.
+5. Run the Application
+Backend:
 cd backend
-
 npm run dev
-```
-
-### 7. Run the Frontend
-
-Open another terminal:
-
-```bash
+Frontend: In a separate terminal:
 cd frontend
-
 npm run dev
-```
-
-The frontend development server will provide a local URL in the terminal.
-
-## 🔔 Push Notification Setup
-
-FinTrack uses Web Push technology with VAPID authentication.
-
-To enable push notifications:
-
-1. Configure VAPID public and private keys.
-2. Configure the VAPID subject.
+Open the frontend development URL shown in your terminal (commonly
+http://localhost:5173).
+6. Docker
+If using the configured Docker Compose setup, run from the project root:
+docker compose up --build -d
+Push Notification Setup
+FinTrack uses the Web Push API with VAPID authentication.
+1. Configure the VAPID public key, private key, and subject on the
+   backend.
+2. Configure the frontend API URL.
 3. Register the Service Worker.
 4. Allow notification permissions in the browser.
 5. Subscribe the device to push notifications.
+Push notifications require HTTPS in production and compatible browser
+and device support.
+CI/CD and Deployment
+FinTrack is deployed using Render, with PostgreSQL hosted on Neon.
 
-Push notifications require HTTPS in production and browser/device support.
+  Component        Platform
+  Frontend         Render
+Backend          Render
+Database         Neon PostgreSQL
+Source Control   GitHub
+Progressive Web App (PWA)
+FinTrack supports installation as a Progressive Web App.
+iOS Installation
+1. Open FinTrack in Safari.
+2. Tap the Share button.
+3. Select Add to Home Screen.
+4. Tap Add.
+Android Installation
+1. Open FinTrack in a supported browser.
+2. Select Install App or Add to Home Screen.
+3. Complete the installation.
+Push Notifications
+FinTrack uses Service Workers and the Web Push API to deliver browser
+push notifications.
 
-## 🌐 Live Demo
-
-Frontend: https://fintrack-frontend-wdf4.onrender.com/
-
-Backend: Deployed separately on Render.
-
-## 🔒 Security
-
-- Environment variables are excluded from version control.
-- API endpoints use authentication middleware.
-- Financial records are associated with individual user accounts.
-- Push subscriptions are associated with authenticated users.
-- API responses containing private financial data are excluded from Service Worker caching.
-
-## 👩‍💻 Author
-
-**Hsu Myat Noe**
-
-GitHub: https://github.com/hsumyatnoe2092
-
-## 📄 License
-
-This project is currently provided for educational and portfolio purposes.
-
----
-
-**FinTrack – Take Control of Your Finances.**
+Notification availability depends on browser support, device settings,
+permissions, and installation requirements.
+Security
+Security measures include:
+- Password hashing.
+- JWT-based authentication.
+- Environment-based secret management.
+- Request validation using Zod.
+- User-specific data access controls.
+- Protected API routes.
+- Excluding API and financial data responses from Service Worker
+  caching.
+Future Improvements
+- Automated backend testing.
+- Expanded financial reporting.
+- Enhanced offline functionality.
+- Automated database backups.
+- Monitoring and logging improvements.
+Author
+Hsu Myat Noe
+- GitHub: hsumyatnoe2092
+- Project Repository:
+  FinTrack
+FinTrack --- Take Control of Your Finances.
