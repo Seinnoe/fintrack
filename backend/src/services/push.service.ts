@@ -1,4 +1,4 @@
-import webpush from "web-push";
+import { sendNotification, setVapidDetails } from "web-push";
 import { prisma } from "../config/prisma.js";
 
 const publicKey = process.env.VAPID_PUBLIC_KEY;
@@ -6,7 +6,7 @@ const privateKey = process.env.VAPID_PRIVATE_KEY;
 const subject = process.env.VAPID_SUBJECT;
 
 if (publicKey && privateKey && subject) {
-  webpush.setVapidDetails(subject, publicKey, privateKey);
+  setVapidDetails(subject, publicKey, privateKey);
 }
 
 export function getVapidPublicKey() {
@@ -41,7 +41,7 @@ export async function sendPushNotification(
   await Promise.all(
     subscriptions.map(async (subscription) => {
       try {
-        await webpush.sendNotification(
+        await sendNotification(
           {
             endpoint: subscription.endpoint,
             keys: {
